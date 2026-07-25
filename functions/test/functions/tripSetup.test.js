@@ -64,4 +64,21 @@ describe('tripSetup', () => {
     const snap = await tripRef.get();
     expect(snap.data().status).toBe('active');
   });
+
+  test('updateTripSetup ignores disallowed fields like status or PIN hashes in patch', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'active', adminPinHash: 'original-hash' });
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+
+    await updateTripSetup(db, {
+      sessionToken: token,
+      tripId: tripRef.id,
+      patch: { status: 'setup', adminPinHash: 'attacker-value', location: '속초' },
+    });
+
+    const snap = await tripRef.get();
+    expect(snap.data().status).toBe('active');
+    expect(snap.data().adminPinHash).toBe('original-hash');
+    expect(snap.data().location).toBe('속초');
+  });
 });

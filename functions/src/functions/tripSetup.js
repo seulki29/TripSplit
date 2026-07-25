@@ -15,7 +15,11 @@ async function updateTripSetup(db, data) {
   const snap = await ref.get();
   if (!snap.exists) throw new Error('TRIP_NOT_FOUND');
 
-  const update = { ...data.patch };
+  const update = {};
+  if ('period' in data.patch) update.period = data.patch.period;
+  if ('location' in data.patch) update.location = data.patch.location;
+  if ('lodging' in data.patch) update.lodging = data.patch.lodging;
+
   if (snap.data().status === 'setup') update.status = 'active';
 
   await ref.update(update);
