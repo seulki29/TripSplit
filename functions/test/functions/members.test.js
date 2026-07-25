@@ -58,4 +58,14 @@ describe('members', () => {
       sessionToken: token, tripId: 't1', memberId, patch: { name: '행범' },
     })).rejects.toThrow('NAME_TAKEN');
   });
+
+  test('updateMember rejects renaming to an empty name', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId, patch: { name: '' },
+    })).rejects.toThrow('NAME_REQUIRED');
+  });
 });

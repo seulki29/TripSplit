@@ -26,7 +26,8 @@ async function updateMember(db, data) {
   const { tripId, memberId, patch } = data;
   const membersRef = db.collection('trips').doc(tripId).collection('members');
 
-  if (patch.name) {
+  if (patch.name !== undefined) {
+    if (!patch.name || !patch.name.trim()) throw new Error('NAME_REQUIRED');
     const existing = await membersRef.where('name', '==', patch.name).get();
     const clashesWithAnother = existing.docs.some((d) => d.id !== memberId);
     if (clashesWithAnother) throw new Error('NAME_TAKEN');
