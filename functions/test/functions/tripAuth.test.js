@@ -41,6 +41,7 @@ describe('tripAuth', () => {
     const { token } = await verifyMemberPin(db, { slug: 'sfa-2026', name: '슬기', pin: '2222' });
     const session = (await db.collection('sessions').doc(token).get()).data();
     expect(session.role).toBe('member');
+    expect(session.tripId).toBe(tripRef.id);
     expect(session.memberId).toBe(memberRef.id);
   });
 
