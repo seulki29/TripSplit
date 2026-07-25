@@ -11,6 +11,10 @@ function generateToken() {
 }
 
 async function createSession(db, { role, tripId = null, memberId = null }) {
+  if (SESSION_TTL_MS[role] === undefined) {
+    throw new Error('INVALID_ROLE');
+  }
+
   const token = generateToken();
   const expiresAt = Date.now() + SESSION_TTL_MS[role];
   await db.collection('sessions').doc(token).set({ role, tripId, memberId, expiresAt });

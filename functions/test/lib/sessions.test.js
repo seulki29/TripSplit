@@ -42,4 +42,15 @@ describe('sessions', () => {
     const session = await requireSession(db, token, ['superadmin'], 'trip2');
     expect(session.role).toBe('superadmin');
   });
+
+  test('a member session scoped to one trip cannot act on another trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 'trip1', memberId: 'm1' });
+    await expect(requireSession(db, token, ['member'], 'trip2')).rejects.toThrow('FORBIDDEN');
+  });
+
+  test('createSession rejects invalid roles', async () => {
+    const db = new FakeFirestore();
+    await expect(createSession(db, { role: 'not-a-real-role' })).rejects.toThrow('INVALID_ROLE');
+  });
 });
