@@ -60,9 +60,22 @@ async function updateExpense(db, data) {
     if (expense.confirmed) throw new Error('EXPENSE_LOCKED');
   }
 
-  if (patch.category && !CATEGORIES.includes(patch.category)) throw new Error('INVALID_CATEGORY');
+  const update = {};
+  if ('date' in patch) update.date = patch.date;
+  if ('category' in patch) {
+    if (!CATEGORIES.includes(patch.category)) throw new Error('INVALID_CATEGORY');
+    update.category = patch.category;
+  }
+  if ('amount' in patch) {
+    if (!(Number(patch.amount) > 0)) throw new Error('INVALID_AMOUNT');
+    update.amount = Number(patch.amount);
+  }
+  if ('merchant' in patch) update.merchant = patch.merchant;
+  if ('detail' in patch) update.detail = patch.detail;
+  if ('photoUrl' in patch) update.photoUrl = patch.photoUrl;
 
-  await ref.update({ ...patch, updatedAt: Date.now() });
+  update.updatedAt = Date.now();
+  await ref.update(update);
   return { ok: true };
 }
 

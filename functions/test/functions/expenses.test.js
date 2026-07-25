@@ -130,4 +130,29 @@ describe('expenses', () => {
     expect(result).toHaveLength(2);
     expect(result[0].id).toBeDefined();
   });
+
+  test('a member cannot self-confirm their own expense via updateExpense patch', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+
+    await updateExpense(db, { sessionToken: token, tripId: 't1', expenseId, patch: { confirmed: true } });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().confirmed).toBe(false);
+  });
+
+  test('updateExpense rejects an invalid amount in patch', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+
+    await expect(updateExpense(db, {
+      sessionToken: token, tripId: 't1', expenseId, patch: { amount: -500 },
+    })).rejects.toThrow('INVALID_AMOUNT');
+  });
 });
