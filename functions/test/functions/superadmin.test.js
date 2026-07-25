@@ -54,6 +54,13 @@ describe('superadmin functions', () => {
     })).rejects.toThrow('SLUG_TAKEN');
   });
 
+  test('listTrips requires a superadmin session', async () => {
+    const db = new FakeFirestore();
+    await expect(listTrips(db, {
+      sessionToken: 'nope',
+    })).rejects.toThrow('UNAUTHENTICATED');
+  });
+
   test('listTrips never exposes PIN hashes', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'superadmin' });
@@ -65,6 +72,13 @@ describe('superadmin functions', () => {
     expect(trips).toHaveLength(1);
     expect(trips[0].adminPinHash).toBeUndefined();
     expect(trips[0].memberPinHash).toBeUndefined();
+  });
+
+  test('updateTrip requires a superadmin session', async () => {
+    const db = new FakeFirestore();
+    await expect(updateTrip(db, {
+      sessionToken: 'nope', tripId: 'x', patch: { name: 'y' },
+    })).rejects.toThrow('UNAUTHENTICATED');
   });
 
   test('updateTrip re-hashes a new admin PIN instead of storing it raw', async () => {
@@ -81,6 +95,13 @@ describe('superadmin functions', () => {
     expect(snap.data().adminPin).toBeUndefined();
   });
 
+  test('archiveTrip requires a superadmin session', async () => {
+    const db = new FakeFirestore();
+    await expect(archiveTrip(db, {
+      sessionToken: 'nope', tripId: 'x',
+    })).rejects.toThrow('UNAUTHENTICATED');
+  });
+
   test('archiveTrip removes the trip and its members subcollection', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'superadmin' });
@@ -93,5 +114,8 @@ describe('superadmin functions', () => {
 
     const snap = await db.collection('trips').doc(tripId).get();
     expect(snap.exists).toBe(false);
+
+    const memberSnap = await db.collection('trips').doc(tripId).collection('members').doc('m1').get();
+    expect(memberSnap.exists).toBe(false);
   });
 });

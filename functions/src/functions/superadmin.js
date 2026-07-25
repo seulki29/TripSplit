@@ -51,11 +51,11 @@ async function updateTrip(db, data) {
   const { tripId, patch } = data;
   const update = { ...patch };
 
-  if (update.adminPin) {
+  if (update.adminPin !== undefined) {
     update.adminPinHash = await hashSecret(update.adminPin);
     delete update.adminPin;
   }
-  if (update.memberPin) {
+  if (update.memberPin !== undefined) {
     update.memberPinHash = await hashSecret(update.memberPin);
     delete update.memberPin;
   }
