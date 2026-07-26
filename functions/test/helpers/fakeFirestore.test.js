@@ -39,6 +39,39 @@ describe('FakeFirestore', () => {
     expect(result.docs.map((d) => d.id).sort()).toEqual(['t2', 't3']);
   });
 
+  test('runTransaction exposes get/set/update and the writes survive the transaction', async () => {
+    const db = new FakeFirestore();
+    await db.collection('counters').doc('c1').set({ count: 1, label: 'first' });
+
+    const ref = db.collection('counters').doc('c1');
+    const seen = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      tx.update(ref, { count: snap.data().count + 1 });
+      tx.set(db.collection('counters').doc('c2'), { count: 99 });
+      return snap.data().label;
+    });
+
+    expect(seen).toBe('first');
+    expect((await db.collection('counters').doc('c1').get()).data()).toEqual({ count: 2, label: 'first' });
+    expect((await db.collection('counters').doc('c2').get()).data()).toEqual({ count: 99 });
+  });
+
+  test('runTransaction reports a missing document as not existing', async () => {
+    const db = new FakeFirestore();
+    const exists = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(db.collection('counters').doc('nope'));
+      return snap.exists;
+    });
+    expect(exists).toBe(false);
+  });
+
+  test('runTransaction propagates an error thrown inside the callback', async () => {
+    const db = new FakeFirestore();
+    await expect(db.runTransaction(async () => {
+      throw new Error('BOOM');
+    })).rejects.toThrow('BOOM');
+  });
+
   test('recursiveDelete removes a document and everything nested under it', async () => {
     const db = new FakeFirestore();
     const tripRef = db.collection('trips').doc('t1');

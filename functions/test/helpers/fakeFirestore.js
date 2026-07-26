@@ -70,6 +70,21 @@ class FakeCollectionRef {
   }
 }
 
+class FakeTransaction {
+  constructor(store) { this.store = store; }
+
+  async get(ref) { return ref.get(); }
+
+  set(ref, value) {
+    this.store.data.set(ref.path, { ...value });
+  }
+
+  update(ref, patch) {
+    const current = this.store.data.get(ref.path) || {};
+    this.store.data.set(ref.path, { ...current, ...patch });
+  }
+}
+
 class FakeFirestore {
   constructor() {
     this.data = new Map();
@@ -78,6 +93,10 @@ class FakeFirestore {
 
   collection(name) {
     return new FakeCollectionRef(this, name);
+  }
+
+  async runTransaction(updateFunction) {
+    return updateFunction(new FakeTransaction(this));
   }
 
   async recursiveDelete(ref) {

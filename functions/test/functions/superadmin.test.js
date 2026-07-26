@@ -20,6 +20,33 @@ describe('superadmin functions', () => {
     await expect(verifySuperadminPassword(db, hash, { password: 'wrong' })).rejects.toThrow('INVALID_PASSWORD');
   });
 
+  test('repeated wrong superadmin passwords eventually throw TOO_MANY_ATTEMPTS', async () => {
+    const db = new FakeFirestore();
+    const hash = await hashSecret('20112988sk!');
+
+    for (let i = 0; i < 10; i += 1) {
+      await expect(verifySuperadminPassword(db, hash, { password: 'wrong' })).rejects.toThrow('INVALID_PASSWORD');
+    }
+
+    await expect(verifySuperadminPassword(db, hash, { password: 'wrong' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
+    // The correct password is locked out too while the window is open.
+    await expect(verifySuperadminPassword(db, hash, { password: '20112988sk!' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
+  }, 30000);
+
+  test('a successful superadmin login resets the attempt counter', async () => {
+    const db = new FakeFirestore();
+    const hash = await hashSecret('20112988sk!');
+
+    for (let i = 0; i < 9; i += 1) {
+      await expect(verifySuperadminPassword(db, hash, { password: 'wrong' })).rejects.toThrow('INVALID_PASSWORD');
+    }
+
+    await expect(verifySuperadminPassword(db, hash, { password: '20112988sk!' })).resolves.toBeDefined();
+
+    // Without the reset the counter would already be at 10 and this would be TOO_MANY_ATTEMPTS.
+    await expect(verifySuperadminPassword(db, hash, { password: 'wrong' })).rejects.toThrow('INVALID_PASSWORD');
+  }, 30000);
+
   test('createTrip requires a superadmin session', async () => {
     const db = new FakeFirestore();
     await expect(createTrip(db, {

@@ -1,9 +1,16 @@
 const { hashSecret, verifySecret } = require('../lib/hashing');
 const { createSession, requireSession } = require('../lib/sessions');
+const { checkLoginThrottle, resetLoginThrottle } = require('../lib/loginThrottle');
+
+const SUPERADMIN_THROTTLE_KEY = 'superadmin';
 
 async function verifySuperadminPassword(db, passwordHash, data) {
+  await checkLoginThrottle(db, SUPERADMIN_THROTTLE_KEY);
+
   const ok = await verifySecret(data.password || '', passwordHash);
   if (!ok) throw new Error('INVALID_PASSWORD');
+
+  await resetLoginThrottle(db, SUPERADMIN_THROTTLE_KEY);
   return createSession(db, { role: 'superadmin' });
 }
 
