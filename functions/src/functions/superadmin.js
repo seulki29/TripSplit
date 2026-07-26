@@ -90,6 +90,7 @@ async function updateTrip(db, data) {
 
 async function archiveTrip(db, data) {
   await requireSession(db, data.sessionToken, ['superadmin']);
+  await revokeTripSessions(db, data.tripId);
   await db.recursiveDelete(db.collection('trips').doc(data.tripId));
   return { ok: true };
 }

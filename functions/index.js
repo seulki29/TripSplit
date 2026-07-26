@@ -43,6 +43,7 @@ exports.archiveTrip = onCall(wrap(superadmin.archiveTrip));
 exports.verifyAdminPin = onCall(wrap(tripAuth.verifyAdminPin));
 exports.verifyMemberPin = onCall(wrap(tripAuth.verifyMemberPin));
 exports.listMembersForLogin = onCall(wrap(tripAuth.listMembersForLogin));
+exports.logout = onCall(wrap(tripAuth.logout));
 
 exports.getTripSetup = onCall(wrap(tripSetup.getTripSetup));
 exports.updateTripSetup = onCall(wrap(tripSetup.updateTripSetup));

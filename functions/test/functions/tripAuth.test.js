@@ -1,7 +1,8 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { hashSecret } = require('../../src/lib/hashing');
+const { createSession, requireSession } = require('../../src/lib/sessions');
 const {
-  verifyAdminPin, verifyMemberPin, findTripBySlug, listMembersForLogin,
+  verifyAdminPin, verifyMemberPin, findTripBySlug, listMembersForLogin, logout,
 } = require('../../src/functions/tripAuth');
 
 async function makeTrip(db, overrides = {}) {
@@ -146,6 +147,42 @@ describe('listMembersForLogin', () => {
 
     await expect(verifyAdminPin(db, { slug: 'sfa-2026', pin: '1111' })).resolves.toBeDefined();
   }, 30000);
+});
+
+describe('logout', () => {
+  test('deletes the session so the token stops working', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    await expect(requireSession(db, token, ['member'], 't1')).resolves.toBeDefined();
+
+    await expect(logout(db, { sessionToken: token })).resolves.toEqual({ ok: true });
+
+    await expect(requireSession(db, token, ['member'], 't1')).rejects.toThrow('UNAUTHENTICATED');
+  });
+
+  test('logging out twice does not throw', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    await logout(db, { sessionToken: token });
+    await expect(logout(db, { sessionToken: token })).resolves.toEqual({ ok: true });
+  });
+
+  test('a bogus or missing token is a harmless no-op', async () => {
+    const db = new FakeFirestore();
+    await expect(logout(db, { sessionToken: 'never-existed' })).resolves.toEqual({ ok: true });
+    await expect(logout(db, {})).resolves.toEqual({ ok: true });
+  });
+
+  test('only the given session is deleted', async () => {
+    const db = new FakeFirestore();
+    const { token: mine } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { token: theirs } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm2' });
+
+    await logout(db, { sessionToken: mine });
+
+    await expect(requireSession(db, theirs, ['member'], 't1')).resolves.toBeDefined();
+  });
 });
 
 describe('tripAuth login throttling', () => {

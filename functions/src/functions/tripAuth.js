@@ -59,6 +59,17 @@ async function listMembersForLogin(db, data) {
   return membersSnap.docs.map((d) => ({ id: d.id, name: d.data().name }));
 }
 
+/**
+ * Public endpoint. No requireSession call: logging out with an already-invalid
+ * or missing token is a harmless no-op, not an error.
+ */
+async function logout(db, data) {
+  if (data.sessionToken) {
+    await db.collection('sessions').doc(data.sessionToken).delete();
+  }
+  return { ok: true };
+}
+
 module.exports = {
-  verifyAdminPin, verifyMemberPin, findTripBySlug, listMembersForLogin,
+  verifyAdminPin, verifyMemberPin, findTripBySlug, listMembersForLogin, logout,
 };

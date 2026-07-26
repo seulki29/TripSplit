@@ -279,4 +279,35 @@ describe('superadmin functions', () => {
     const memberSnap = await db.collection('trips').doc(tripId).collection('members').doc('m1').get();
     expect(memberSnap.exists).toBe(false);
   });
+
+  test('archiveTrip revokes every session for the deleted trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId });
+    const { token: memberToken } = await createSession(db, { role: 'member', tripId, memberId: 'm1' });
+
+    await archiveTrip(db, { sessionToken: token, tripId });
+
+    await expect(requireSession(db, adminToken, ['admin'], tripId)).rejects.toThrow('UNAUTHENTICATED');
+    await expect(requireSession(db, memberToken, ['member'], tripId)).rejects.toThrow('UNAUTHENTICATED');
+  });
+
+  test('archiveTrip leaves sessions for other trips alone', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const { tripId: otherTripId } = await createTrip(db, {
+      sessionToken: token, name: 'B', slug: 'b', group: 'G', adminPin: '3333', memberPin: '4444',
+    });
+    const { token: survivor } = await createSession(db, { role: 'admin', tripId: otherTripId });
+
+    await archiveTrip(db, { sessionToken: token, tripId });
+
+    await expect(requireSession(db, survivor, ['admin'], otherTripId)).resolves.toBeDefined();
+  });
 });
