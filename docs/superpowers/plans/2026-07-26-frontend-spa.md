@@ -160,7 +160,7 @@ git commit -m "feat(frontend): scaffold frontend test tooling, hosting config, a
 - Create: `public/style.css`
 
 **Interfaces:**
-- Produces: CSS custom properties (`--ink`, `--ink-2`, `--ink-3`, `--paper`, `--paper-2`, `--rule`, `--accent`, `--accent-2`, `--warm`, `--receive`, `--pay`, `--danger`, `--f-display`, `--f-body`, `--f-kr`, `--radius`) and reusable classes every later task's HTML relies on: `.btn`/`.btn-primary`/`.btn-secondary`/`.btn-danger`, `.input`, `.card`, `.tabs`/`.tab`/`.tab.active`, `.chip`/`.chip-selected`, `.chip-group`, `.badge`/`.badge-locked`, `.modal-overlay`/`.modal-box`/`.modal-header`/`.modal-body`, `.toast`/`.toast-info`/`.toast-error`/`.toast-success`, `.tag-*` per-member name color tags (reused from the original report styling).
+- Produces: CSS custom properties (`--ink`, `--ink-2`, `--ink-3`, `--paper`, `--paper-2`, `--rule`, `--accent`, `--accent-2`, `--warm`, `--receive`, `--pay`, `--danger`, `--f-display`, `--f-body`, `--f-kr`, `--radius`) and reusable classes every later task's HTML relies on: `.btn`/`.btn-primary`/`.btn-secondary`/`.btn-danger`, `.input`, `.card`, `.tabs`/`.tab`/`.tab.active`, `.chip`/`.chip-selected`, `.chip-group`, `.badge`/`.badge-locked`, `.modal-overlay`/`.modal-box`/`.modal-header`/`.modal-body`, `.toast`/`.toast-info`/`.toast-error`/`.toast-success`, and a generic `.tag` class (category labels only — every consuming task in this plan uses category tags, never per-member name colors; the original report's per-name-hardcoded `.tag-슬기`-style classes don't generalize to a multi-tenant app with arbitrary member names per trip, so they are intentionally NOT part of this design).
 
 - [ ] **Step 1: Write the stylesheet**
 
