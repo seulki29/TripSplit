@@ -1,5 +1,5 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
-const { checkLoginThrottle, resetLoginThrottle } = require('../../src/lib/loginThrottle');
+const { checkLoginThrottle, resetLoginThrottle, throttleDocId } = require('../../src/lib/loginThrottle');
 
 describe('checkLoginThrottle', () => {
   test('allows attempts under the limit', async () => {
@@ -67,6 +67,43 @@ describe('checkLoginThrottle', () => {
     const secondStart = (await db.collection('loginAttempts').doc('admin:sfa-2026').get()).data().windowStart;
 
     expect(secondStart).toBe(firstStart);
+  });
+});
+
+describe('throttle document ids', () => {
+  test("a member name containing '/' still produces a legal, single-segment document id", async () => {
+    const db = new FakeFirestore();
+    const key = 'member:sfa-2026:a/b';
+
+    await checkLoginThrottle(db, key);
+
+    expect(throttleDocId(key)).toBe('member:sfa-2026:a%2Fb');
+    expect(throttleDocId(key)).not.toContain('/');
+    const ids = [...db.data.keys()].filter((p) => p.startsWith('loginAttempts/'));
+    expect(ids).toEqual(['loginAttempts/member:sfa-2026:a%2Fb']);
+  });
+
+  test('the encoding is collision-free between a literal slash and a literal %2F', async () => {
+    const db = new FakeFirestore();
+
+    for (let i = 0; i < 10; i += 1) {
+      await checkLoginThrottle(db, 'member:t:a/b');
+    }
+
+    await expect(checkLoginThrottle(db, 'member:t:a/b')).rejects.toThrow('TOO_MANY_ATTEMPTS');
+    await expect(checkLoginThrottle(db, 'member:t:a%2Fb')).resolves.toBeUndefined();
+  });
+
+  test('resetLoginThrottle clears the same encoded id that checkLoginThrottle wrote', async () => {
+    const db = new FakeFirestore();
+    const key = 'member:sfa-2026:a/b';
+    for (let i = 0; i < 10; i += 1) {
+      await checkLoginThrottle(db, key);
+    }
+
+    await resetLoginThrottle(db, key);
+
+    await expect(checkLoginThrottle(db, key)).resolves.toBeUndefined();
   });
 });
 
