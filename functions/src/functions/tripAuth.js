@@ -27,8 +27,22 @@ async function verifyAdminPin(db, data) {
 async function verifyMemberPin(db, data) {
   if (!data.slug || !data.name) throw new Error('MISSING_FIELDS');
 
-  const throttleKey = `member:${data.slug}:${data.name}`;
-  await checkLoginThrottle(db, throttleKey);
+  // Two buckets, because two different things need bounding.
+  //
+  // The secret actually being guessed is trip.memberPinHash — ONE hash shared by
+  // every member of the trip. A per-name bucket alone is therefore no limit at
+  // all: an attacker sends a fresh random name on every request, lands in a
+  // brand-new bucket each time, and gets unlimited PIN guesses. The trip-wide
+  // bucket bounds the total guess budget against that shared PIN no matter how
+  // many names are tried; its limit is higher (30) because it must absorb the
+  // normal login traffic of every legitimate member.
+  //
+  // The per-name bucket stays at the default 10 — a separate concern: it bounds
+  // a targeted lockout attempt against one specific member's name.
+  const tripThrottleKey = `member:${data.slug}`;
+  const nameThrottleKey = `member:${data.slug}:${data.name}`;
+  await checkLoginThrottle(db, tripThrottleKey, 30, 15 * 60 * 1000);
+  await checkLoginThrottle(db, nameThrottleKey, 10, 15 * 60 * 1000);
 
   const trip = await findTripBySlug(db, data.slug);
   const ok = await verifySecret(data.pin || '', trip.memberPinHash);
@@ -39,7 +53,10 @@ async function verifyMemberPin(db, data) {
   if (membersSnap.empty) throw new Error('MEMBER_NOT_FOUND');
   const member = membersSnap.docs[0];
 
-  await resetLoginThrottle(db, throttleKey);
+  // Only a fully successful login (right PIN *and* a real member name) resets
+  // the counters — a correct PIN with a made-up name must not buy more guesses.
+  await resetLoginThrottle(db, tripThrottleKey);
+  await resetLoginThrottle(db, nameThrottleKey);
   return createSession(db, { role: 'member', tripId: trip.id, memberId: member.id });
 }
 

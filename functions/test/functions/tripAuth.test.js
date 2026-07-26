@@ -248,9 +248,47 @@ describe('tripAuth login throttling', () => {
       await verifyMemberPin(db, { slug: 'sfa-2026', name: '슬기', pin: 'wrong' }).catch(() => {});
     }
 
+    // 슬기's per-name bucket is exhausted...
     await expect(verifyMemberPin(db, { slug: 'sfa-2026', name: '슬기', pin: '2222' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
+    // ...but the trip-wide bucket (limit 30) still has room, so another member
+    // logs in normally. Both throttles apply to every attempt now.
     await expect(verifyMemberPin(db, { slug: 'sfa-2026', name: '행범', pin: '2222' })).resolves.toBeDefined();
+    // 행범's success resets the trip-wide counter but not 슬기's own bucket.
+    await expect(verifyMemberPin(db, { slug: 'sfa-2026', name: '슬기', pin: '2222' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
   }, 30000);
+
+  test('a fresh name on every request cannot bypass the member PIN throttle', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db);
+    await tripRef.collection('members').add({ name: '슬기', weight: 1, excludedCategories: [] });
+
+    // The attacker is guessing memberPinHash, which is shared by the whole trip.
+    // Every request carries a brand-new name, so every per-name bucket sees only
+    // one attempt: only the trip-wide bucket can stop this.
+    const outcomes = [];
+    for (let i = 0; i < 40; i += 1) {
+      outcomes.push(await verifyMemberPin(db, { slug: 'sfa-2026', name: `attacker-${i}`, pin: 'wrong' })
+        .then(() => 'LOGGED_IN', (err) => err.message));
+    }
+
+    expect(outcomes.slice(0, 30)).toEqual(Array(30).fill('INVALID_PIN'));
+    // Attempt 31 onwards: the shared secret's guess budget is spent.
+    expect(outcomes.slice(30)).toEqual(Array(10).fill('TOO_MANY_ATTEMPTS'));
+  }, 60000);
+
+  test('a correct member PIN with a bogus name does not refund the throttle budget', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db);
+    await tripRef.collection('members').add({ name: '슬기', weight: 1, excludedCategories: [] });
+
+    // MEMBER_NOT_FOUND is a success oracle for the PIN, so it must not reset the
+    // counters — otherwise finding the PIN buys unlimited further attempts.
+    for (let i = 0; i < 30; i += 1) {
+      await expect(verifyMemberPin(db, { slug: 'sfa-2026', name: `ghost-${i}`, pin: '2222' })).rejects.toThrow('MEMBER_NOT_FOUND');
+    }
+
+    await expect(verifyMemberPin(db, { slug: 'sfa-2026', name: 'ghost-30', pin: '2222' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
+  }, 60000);
 
   test('a successful member login resets the attempt counter', async () => {
     const db = new FakeFirestore();
