@@ -37,11 +37,30 @@ describe('session.js', () => {
   test('getSession returns null for unparsable stored data', () => {
     localStorage.setItem('sfayw_session', 'not json');
     assert.equal(getSession(), null);
+    assert.equal(localStorage.getItem('sfayw_session'), null);
   });
 
   test('clearSession removes the stored session', () => {
     setSession({ token: 'abc', expiresAt: Date.now() + 100000, role: 'member', tripId: 't1', tripSlug: 'sfa-2026', memberId: 'm1' });
     clearSession();
     assert.equal(getSession(), null);
+  });
+
+  test('getSession clears storage and returns null when the stored value parses to null', () => {
+    localStorage.setItem('sfayw_session', 'null');
+    assert.equal(getSession(), null);
+    assert.equal(localStorage.getItem('sfayw_session'), null);
+  });
+
+  test('getSession clears storage and returns null when expiresAt is missing', () => {
+    localStorage.setItem('sfayw_session', JSON.stringify({ token: 'abc' }));
+    assert.equal(getSession(), null);
+    assert.equal(localStorage.getItem('sfayw_session'), null);
+  });
+
+  test('getSession clears storage and returns null when expiresAt is 0', () => {
+    localStorage.setItem('sfayw_session', JSON.stringify({ token: 'abc', expiresAt: 0 }));
+    assert.equal(getSession(), null);
+    assert.equal(localStorage.getItem('sfayw_session'), null);
   });
 });

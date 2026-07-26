@@ -12,7 +12,12 @@ function getSession() {
     return null;
   }
 
-  if (session.expiresAt && session.expiresAt < Date.now()) {
+  if (typeof session !== 'object' || session === null) {
+    localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+
+  if (typeof session.expiresAt !== 'number' || session.expiresAt < Date.now()) {
     localStorage.removeItem(STORAGE_KEY);
     return null;
   }
