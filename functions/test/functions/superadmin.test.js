@@ -1,6 +1,6 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { hashSecret } = require('../../src/lib/hashing');
-const { createSession } = require('../../src/lib/sessions');
+const { createSession, requireSession } = require('../../src/lib/sessions');
 const {
   verifySuperadminPassword, createTrip, listTrips, updateTrip, archiveTrip,
 } = require('../../src/functions/superadmin');
@@ -120,6 +120,140 @@ describe('superadmin functions', () => {
     const snap = await db.collection('trips').doc(tripId).get();
     expect(snap.data().adminPinHash).not.toBe('9999');
     expect(snap.data().adminPin).toBeUndefined();
+  });
+
+  test('updateTrip rejects a trip that does not exist', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+
+    await expect(updateTrip(db, {
+      sessionToken: token, tripId: 'ghost', patch: { name: 'x' },
+    })).rejects.toThrow('TRIP_NOT_FOUND');
+  });
+
+  test('updateTrip silently drops fields outside the allowlist, including a raw adminPinHash', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const before = (await db.collection('trips').doc(tripId).get()).data();
+
+    await updateTrip(db, {
+      sessionToken: token,
+      tripId,
+      patch: {
+        adminPinHash: 'attacker-value',
+        memberPinHash: 'attacker-value',
+        slug: 'stolen-slug',
+        createdAt: 0,
+        name: 'renamed',
+      },
+    });
+
+    const after = (await db.collection('trips').doc(tripId).get()).data();
+    expect(after.name).toBe('renamed');
+    expect(after.adminPinHash).toBe(before.adminPinHash);
+    expect(after.memberPinHash).toBe(before.memberPinHash);
+    expect(after.slug).toBe('a');
+    expect(after.createdAt).toBe(before.createdAt);
+  });
+
+  test('updateTrip rejects a status outside the three valid values', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+
+    await expect(updateTrip(db, {
+      sessionToken: token, tripId, patch: { status: 'archived' },
+    })).rejects.toThrow('INVALID_STATUS');
+  });
+
+  test('updateTrip accepts each of the three valid statuses', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+
+    for (const status of ['setup', 'active', 'completed']) {
+      await updateTrip(db, { sessionToken: token, tripId, patch: { status } });
+      expect((await db.collection('trips').doc(tripId).get()).data().status).toBe(status);
+    }
+  });
+
+  test('updateTrip treats a missing patch as an empty patch', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const before = (await db.collection('trips').doc(tripId).get()).data();
+
+    await expect(updateTrip(db, { sessionToken: token, tripId })).resolves.toEqual({ ok: true });
+
+    expect((await db.collection('trips').doc(tripId).get()).data()).toEqual(before);
+  });
+
+  test('changing the admin PIN revokes every existing session for that trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId });
+    const { token: memberToken } = await createSession(db, { role: 'member', tripId, memberId: 'm1' });
+
+    await updateTrip(db, { sessionToken: token, tripId, patch: { adminPin: '9999' } });
+
+    await expect(requireSession(db, adminToken, ['admin'], tripId)).rejects.toThrow('UNAUTHENTICATED');
+    await expect(requireSession(db, memberToken, ['member'], tripId)).rejects.toThrow('UNAUTHENTICATED');
+    // The superadmin's own session is not tied to a trip and survives.
+    await expect(requireSession(db, token, ['superadmin'])).resolves.toBeDefined();
+  });
+
+  test('changing the member PIN revokes every existing session for that trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const { token: memberToken } = await createSession(db, { role: 'member', tripId, memberId: 'm1' });
+
+    await updateTrip(db, { sessionToken: token, tripId, patch: { memberPin: '8888' } });
+
+    await expect(requireSession(db, memberToken, ['member'], tripId)).rejects.toThrow('UNAUTHENTICATED');
+  });
+
+  test('a non-PIN update leaves existing sessions alone', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId });
+
+    await updateTrip(db, { sessionToken: token, tripId, patch: { name: 'renamed' } });
+
+    await expect(requireSession(db, adminToken, ['admin'], tripId)).resolves.toBeDefined();
+  });
+
+  test('a PIN change does not revoke sessions belonging to a different trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const { tripId: otherTripId } = await createTrip(db, {
+      sessionToken: token, name: 'B', slug: 'b', group: 'G', adminPin: '3333', memberPin: '4444',
+    });
+    const { token: otherAdminToken } = await createSession(db, { role: 'admin', tripId: otherTripId });
+
+    await updateTrip(db, { sessionToken: token, tripId, patch: { adminPin: '9999' } });
+
+    await expect(requireSession(db, otherAdminToken, ['admin'], otherTripId)).resolves.toBeDefined();
   });
 
   test('archiveTrip requires a superadmin session', async () => {

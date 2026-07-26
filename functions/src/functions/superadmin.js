@@ -1,5 +1,5 @@
 const { hashSecret, verifySecret } = require('../lib/hashing');
-const { createSession, requireSession } = require('../lib/sessions');
+const { createSession, requireSession, revokeTripSessions } = require('../lib/sessions');
 const { checkLoginThrottle, resetLoginThrottle } = require('../lib/loginThrottle');
 
 const SUPERADMIN_THROTTLE_KEY = 'superadmin';
@@ -55,19 +55,36 @@ async function listTrips(db, data) {
 
 async function updateTrip(db, data) {
   await requireSession(db, data.sessionToken, ['superadmin']);
-  const { tripId, patch } = data;
-  const update = { ...patch };
 
-  if (update.adminPin !== undefined) {
-    update.adminPinHash = await hashSecret(update.adminPin);
-    delete update.adminPin;
-  }
-  if (update.memberPin !== undefined) {
-    update.memberPinHash = await hashSecret(update.memberPin);
-    delete update.memberPin;
+  const { tripId } = data;
+  const patch = data.patch || {};
+
+  const ref = db.collection('trips').doc(tripId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('TRIP_NOT_FOUND');
+
+  // Allowlist: slug, createdAt and the PIN hashes themselves are not settable
+  // through this endpoint — only a plaintext PIN, which is hashed here.
+  const update = {};
+  if (patch.name !== undefined) update.name = patch.name;
+  if (patch.group !== undefined) update.group = patch.group;
+  if (patch.status !== undefined) {
+    if (!['setup', 'active', 'completed'].includes(patch.status)) throw new Error('INVALID_STATUS');
+    update.status = patch.status;
   }
 
-  await db.collection('trips').doc(tripId).update(update);
+  let pinsChanged = false;
+  if (patch.adminPin !== undefined) {
+    update.adminPinHash = await hashSecret(patch.adminPin);
+    pinsChanged = true;
+  }
+  if (patch.memberPin !== undefined) {
+    update.memberPinHash = await hashSecret(patch.memberPin);
+    pinsChanged = true;
+  }
+
+  await ref.update(update);
+  if (pinsChanged) await revokeTripSessions(db, tripId);
   return { ok: true };
 }
 

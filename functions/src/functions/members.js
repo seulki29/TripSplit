@@ -23,8 +23,12 @@ async function addMember(db, data) {
 async function updateMember(db, data) {
   await requireSession(db, data.sessionToken, ['admin'], data.tripId);
 
-  const { tripId, memberId, patch } = data;
+  const { tripId, memberId } = data;
+  const patch = data.patch || {};
   const membersRef = db.collection('trips').doc(tripId).collection('members');
+
+  const memberSnap = await membersRef.doc(memberId).get();
+  if (!memberSnap.exists) throw new Error('MEMBER_NOT_FOUND');
 
   if (patch.name !== undefined) {
     if (!patch.name || !patch.name.trim()) throw new Error('NAME_REQUIRED');
@@ -33,7 +37,21 @@ async function updateMember(db, data) {
     if (clashesWithAnother) throw new Error('NAME_TAKEN');
   }
 
-  await membersRef.doc(memberId).update(patch);
+  // Allowlist: anything not named here (role, id, arbitrary attacker fields)
+  // is silently dropped rather than written straight to the document.
+  const update = {};
+  if (patch.name !== undefined) update.name = patch.name;
+  if (patch.weight !== undefined) {
+    if (typeof patch.weight !== 'number' || patch.weight < 0) throw new Error('INVALID_WEIGHT');
+    update.weight = patch.weight;
+  }
+  if (patch.excludedCategories !== undefined) {
+    if (!Array.isArray(patch.excludedCategories)) throw new Error('INVALID_EXCLUDED_CATEGORIES');
+    update.excludedCategories = patch.excludedCategories;
+  }
+  if (patch.account !== undefined) update.account = patch.account;
+
+  await membersRef.doc(memberId).update(update);
   return { ok: true };
 }
 

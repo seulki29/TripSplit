@@ -1,5 +1,5 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
-const { createSession, requireSession } = require('../../src/lib/sessions');
+const { createSession, requireSession, revokeTripSessions } = require('../../src/lib/sessions');
 
 describe('sessions', () => {
   test('a freshly created session is accepted by requireSession', async () => {
@@ -52,5 +52,45 @@ describe('sessions', () => {
   test('createSession rejects invalid roles', async () => {
     const db = new FakeFirestore();
     await expect(createSession(db, { role: 'not-a-real-role' })).rejects.toThrow('INVALID_ROLE');
+  });
+});
+
+describe('revokeTripSessions', () => {
+  test('deletes every session for the given trip', async () => {
+    const db = new FakeFirestore();
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId: 'trip1' });
+    const { token: memberToken } = await createSession(db, { role: 'member', tripId: 'trip1', memberId: 'm1' });
+    const { token: otherMemberToken } = await createSession(db, { role: 'member', tripId: 'trip1', memberId: 'm2' });
+
+    await revokeTripSessions(db, 'trip1');
+
+    for (const token of [adminToken, memberToken, otherMemberToken]) {
+      await expect(requireSession(db, token, ['admin', 'member'])).rejects.toThrow('UNAUTHENTICATED');
+    }
+  });
+
+  test('leaves sessions for other trips untouched', async () => {
+    const db = new FakeFirestore();
+    const { token: doomed } = await createSession(db, { role: 'admin', tripId: 'trip1' });
+    const { token: survivor } = await createSession(db, { role: 'admin', tripId: 'trip2' });
+
+    await revokeTripSessions(db, 'trip1');
+
+    await expect(requireSession(db, doomed, ['admin'])).rejects.toThrow('UNAUTHENTICATED');
+    await expect(requireSession(db, survivor, ['admin'], 'trip2')).resolves.toBeDefined();
+  });
+
+  test('leaves trip-less superadmin sessions untouched', async () => {
+    const db = new FakeFirestore();
+    const { token: superadminToken } = await createSession(db, { role: 'superadmin' });
+
+    await revokeTripSessions(db, 'trip1');
+
+    await expect(requireSession(db, superadminToken, ['superadmin'])).resolves.toBeDefined();
+  });
+
+  test('revoking a trip with no sessions is a no-op', async () => {
+    const db = new FakeFirestore();
+    await expect(revokeTripSessions(db, 'trip-with-nothing')).resolves.toBeUndefined();
   });
 });

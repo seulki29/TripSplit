@@ -68,4 +68,109 @@ describe('members', () => {
       sessionToken: token, tripId: 't1', memberId, patch: { name: '' },
     })).rejects.toThrow('NAME_REQUIRED');
   });
+
+  test('updateMember rejects a member id that does not exist', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId: 'ghost', patch: { weight: 2 },
+    })).rejects.toThrow('MEMBER_NOT_FOUND');
+  });
+
+  test('updateMember silently drops fields outside the allowlist', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await updateMember(db, {
+      sessionToken: token,
+      tripId: 't1',
+      memberId,
+      patch: {
+        role: 'superadmin', tripId: 'another-trip', id: 'hijacked', isAdmin: true, weight: 2,
+      },
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data()).toEqual({
+      name: '슬기', weight: 2, excludedCategories: [], account: null,
+    });
+    expect(snap.data().role).toBeUndefined();
+    expect(snap.data().isAdmin).toBeUndefined();
+  });
+
+  test('updateMember rejects a non-numeric weight', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId, patch: { weight: '2' },
+    })).rejects.toThrow('INVALID_WEIGHT');
+  });
+
+  test('updateMember rejects a negative weight', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId, patch: { weight: -1 },
+    })).rejects.toThrow('INVALID_WEIGHT');
+  });
+
+  test('updateMember accepts a zero weight (a fully subsidised participant)', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId, patch: { weight: 0 },
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data().weight).toBe(0);
+  });
+
+  test('updateMember rejects excludedCategories that is not an array', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId, patch: { excludedCategories: '식비' },
+    })).rejects.toThrow('INVALID_EXCLUDED_CATEGORIES');
+  });
+
+  test('updateMember can set the account details', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await updateMember(db, {
+      sessionToken: token,
+      tripId: 't1',
+      memberId,
+      patch: { account: { bank: '국민', num: '123-456', holder: '슬기' } },
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data().account).toEqual({ bank: '국민', num: '123-456', holder: '슬기' });
+  });
+
+  test('updateMember treats a missing patch as an empty patch', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId,
+    })).resolves.toEqual({ ok: true });
+
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data()).toEqual({
+      name: '슬기', weight: 1, excludedCategories: [], account: null,
+    });
+  });
 });

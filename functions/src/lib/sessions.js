@@ -37,4 +37,16 @@ async function requireSession(db, token, allowedRoles, expectedTripId = null) {
   return session;
 }
 
-module.exports = { generateToken, createSession, requireSession, SESSION_TTL_MS };
+/**
+ * Invalidates every session issued for a trip. Called whenever a trip's PINs
+ * are reissued or the trip is deleted, so old tokens cannot outlive the
+ * credential they were minted from.
+ */
+async function revokeTripSessions(db, tripId) {
+  const snap = await db.collection('sessions').where('tripId', '==', tripId).get();
+  await Promise.all(snap.docs.map((d) => db.collection('sessions').doc(d.id).delete()));
+}
+
+module.exports = {
+  generateToken, createSession, requireSession, revokeTripSessions, SESSION_TTL_MS,
+};
