@@ -1,4 +1,4 @@
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 
@@ -9,6 +9,7 @@ const bucket = admin.storage().bucket();
 const superadminPasswordHash = defineSecret('SUPERADMIN_PASSWORD_HASH');
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
+const { toHttpsError } = require('./src/lib/httpsErrors');
 const superadmin = require('./src/functions/superadmin');
 const tripAuth = require('./src/functions/tripAuth');
 const tripSetup = require('./src/functions/tripSetup');
@@ -22,7 +23,7 @@ function wrap(handler) {
     try {
       return await handler(db, request.data);
     } catch (err) {
-      throw new HttpsError('invalid-argument', err.message);
+      throw toHttpsError(err);
     }
   };
 }
@@ -31,7 +32,7 @@ exports.verifySuperadminPassword = onCall({ secrets: [superadminPasswordHash] },
   try {
     return await superadmin.verifySuperadminPassword(db, superadminPasswordHash.value(), request.data);
   } catch (err) {
-    throw new HttpsError('invalid-argument', err.message);
+    throw toHttpsError(err);
   }
 });
 
@@ -61,7 +62,7 @@ exports.classifyReceipt = onCall({ secrets: [geminiApiKey] }, async (request) =>
   try {
     return await receipts.classifyReceipt(db, bucket, geminiApiKey.value(), request.data);
   } catch (err) {
-    throw new HttpsError('invalid-argument', err.message);
+    throw toHttpsError(err);
   }
 });
 
