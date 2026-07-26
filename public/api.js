@@ -17,13 +17,20 @@ async function callFunction(name, data = {}) {
     payload.sessionToken = session.token;
   }
 
-  const res = await fetch(`${functionsBaseUrl()}/${name}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: payload }),
-  });
-
-  const body = await res.json();
+  let res;
+  let body;
+  try {
+    res = await fetch(`${functionsBaseUrl()}/${name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: payload }),
+    });
+    body = await res.json();
+  } catch {
+    const err = new Error('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    err.status = 'INTERNAL';
+    throw err;
+  }
 
   if (!res.ok || body.error) {
     const status = (body.error?.status || '').toUpperCase();

@@ -102,6 +102,51 @@ describe('callFunction', () => {
     const [url] = fetchMock.mock.calls[0].arguments;
     assert.match(url, /^http:\/\/127\.0\.0\.1:5001\/demo-sfayw\/us-central1\/listTrips$/);
   });
+
+  test('throws a clean INTERNAL error if the response body is not valid JSON', async () => {
+    globalThis.fetch = mock.fn(async () => ({
+      ok: false,
+      status: 502,
+      json: async () => { throw new SyntaxError('Unexpected token <'); },
+    }));
+
+    await assert.rejects(
+      () => callFunction('someFn', {}),
+      (err) => {
+        assert.equal(err.status, 'INTERNAL');
+        return true;
+      }
+    );
+  });
+
+  test('session is cleared before reload is invoked, not after', async () => {
+    const { getSession } = await import('../session.js');
+    setSession({ token: 'tok', expiresAt: Date.now() + 100000, role: 'admin', tripId: 't1', tripSlug: 'sfa-2026', memberId: null });
+    let sessionWasClearedWhenReloadFired = null;
+    globalThis.location.reload = mock.fn(() => {
+      sessionWasClearedWhenReloadFired = (getSession() === null);
+    });
+    globalThis.fetch = fakeFetchOnce(401, { error: { status: 'UNAUTHENTICATED', message: 'x' } });
+
+    await assert.rejects(() => callFunction('listExpenses', {}));
+
+    assert.equal(sessionWasClearedWhenReloadFired, true);
+  });
+
+  test('handles a lowercase/mixed-case error status from the backend', async () => {
+    const { getSession } = await import('../session.js');
+    setSession({ token: 'tok', expiresAt: Date.now() + 100000, role: 'admin', tripId: 't1', tripSlug: 'sfa-2026', memberId: null });
+    globalThis.fetch = fakeFetchOnce(401, { error: { status: 'unauthenticated', message: 'expired' } });
+
+    await assert.rejects(
+      () => callFunction('listExpenses', {}),
+      (err) => {
+        assert.equal(err.status, 'UNAUTHENTICATED');
+        return true;
+      }
+    );
+    assert.equal(getSession(), null);
+  });
 });
 
 describe('logout', () => {
