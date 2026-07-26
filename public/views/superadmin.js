@@ -50,7 +50,12 @@ async function renderDashboard(root) {
 
   document.getElementById('sa-new-trip').addEventListener('click', () => openCreateTripModal(root));
   document.getElementById('sa-logout').addEventListener('click', logout);
-  await loadTrips(root);
+
+  try {
+    await loadTrips(root);
+  } catch (err) {
+    root.querySelector('#sa-trip-list').innerHTML = `<p class="muted" style="margin-top:1rem">여행 목록을 불러오지 못했습니다: ${err.message}</p>`;
+  }
 }
 
 async function loadTrips(root) {
@@ -104,7 +109,11 @@ function openCreateTripModal(root) {
       });
       closeModal();
       showToast('여행이 생성되었습니다', 'success');
-      await loadTrips(root);
+      try {
+        await loadTrips(root);
+      } catch (err) {
+        showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
+      }
     } catch (err) {
       document.getElementById('ct-error').textContent = err.message;
     }
@@ -126,11 +135,20 @@ function openReissueModal(root, tripId) {
     if (adminPin) patch.adminPin = adminPin;
     if (memberPin) patch.memberPin = memberPin;
 
+    if (Object.keys(patch).length === 0) {
+      document.getElementById('ri-error').textContent = '변경할 PIN을 하나 이상 입력해주세요.';
+      return;
+    }
+
     try {
       await callFunction('updateTrip', { tripId, patch });
       closeModal();
       showToast('PIN이 재발급되었습니다. 기존 세션은 모두 로그아웃됩니다.', 'success');
-      await loadTrips(root);
+      try {
+        await loadTrips(root);
+      } catch (err) {
+        showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
+      }
     } catch (err) {
       document.getElementById('ri-error').textContent = err.message;
     }
