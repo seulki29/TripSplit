@@ -43,4 +43,22 @@ async function verifyMemberPin(db, data) {
   return createSession(db, { role: 'member', tripId: trip.id, memberId: member.id });
 }
 
-module.exports = { verifyAdminPin, verifyMemberPin, findTripBySlug };
+/**
+ * Public endpoint: the member names a visitor can pick from before logging in.
+ * Deliberately returns ONLY {id, name} — no weight, excludedCategories or
+ * account data may leak to an unauthenticated caller.
+ */
+async function listMembersForLogin(db, data) {
+  const { slug } = data;
+  if (!slug) throw new Error('MISSING_FIELDS');
+
+  await checkLoginThrottle(db, `roster:${slug}`, 20, 15 * 60 * 1000);
+
+  const trip = await findTripBySlug(db, slug);
+  const membersSnap = await db.collection('trips').doc(trip.id).collection('members').get();
+  return membersSnap.docs.map((d) => ({ id: d.id, name: d.data().name }));
+}
+
+module.exports = {
+  verifyAdminPin, verifyMemberPin, findTripBySlug, listMembersForLogin,
+};

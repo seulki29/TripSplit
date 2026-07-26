@@ -1,6 +1,8 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { hashSecret } = require('../../src/lib/hashing');
-const { verifyAdminPin, verifyMemberPin, findTripBySlug } = require('../../src/functions/tripAuth');
+const {
+  verifyAdminPin, verifyMemberPin, findTripBySlug, listMembersForLogin,
+} = require('../../src/functions/tripAuth');
 
 async function makeTrip(db, overrides = {}) {
   const adminPinHash = await hashSecret('1111');
@@ -76,6 +78,74 @@ describe('tripAuth', () => {
     const db = new FakeFirestore();
     await expect(findTripBySlug(db, undefined)).rejects.toThrow('MISSING_FIELDS');
   });
+});
+
+describe('listMembersForLogin', () => {
+  test('returns only id and name pairs, never weight/exclusions/account data', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db);
+    const memberRef = await tripRef.collection('members').add({
+      name: '슬기',
+      weight: 0.5,
+      excludedCategories: ['식비'],
+      account: { bank: '국민', num: '123-456', holder: '슬기' },
+    });
+
+    const result = await listMembersForLogin(db, { slug: 'sfa-2026' });
+
+    expect(result).toEqual([{ id: memberRef.id, name: '슬기' }]);
+    expect(Object.keys(result[0]).sort()).toEqual(['id', 'name']);
+  });
+
+  test('returns every registered member', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db);
+    await tripRef.collection('members').add({ name: '슬기', weight: 1, excludedCategories: [] });
+    await tripRef.collection('members').add({ name: '행범', weight: 1, excludedCategories: [] });
+
+    const result = await listMembersForLogin(db, { slug: 'sfa-2026' });
+    expect(result.map((m) => m.name).sort()).toEqual(['슬기', '행범']);
+  });
+
+  test('returns an empty array for a trip with no members yet', async () => {
+    const db = new FakeFirestore();
+    await makeTrip(db);
+
+    await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).resolves.toEqual([]);
+  });
+
+  test('rejects an unknown slug', async () => {
+    const db = new FakeFirestore();
+    await expect(listMembersForLogin(db, { slug: 'no-such-trip' })).rejects.toThrow('TRIP_NOT_FOUND');
+  });
+
+  test('rejects a missing slug with MISSING_FIELDS', async () => {
+    const db = new FakeFirestore();
+    await expect(listMembersForLogin(db, {})).rejects.toThrow('MISSING_FIELDS');
+  });
+
+  test('is throttled by the shared login throttle (20 per window)', async () => {
+    const db = new FakeFirestore();
+    await makeTrip(db);
+
+    for (let i = 0; i < 20; i += 1) {
+      await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).resolves.toEqual([]);
+    }
+
+    await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
+  });
+
+  test('roster throttling does not consume the admin login budget for the same slug', async () => {
+    const db = new FakeFirestore();
+    await makeTrip(db);
+
+    for (let i = 0; i < 20; i += 1) {
+      await listMembersForLogin(db, { slug: 'sfa-2026' });
+    }
+    await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
+
+    await expect(verifyAdminPin(db, { slug: 'sfa-2026', pin: '1111' })).resolves.toBeDefined();
+  }, 30000);
 });
 
 describe('tripAuth login throttling', () => {
