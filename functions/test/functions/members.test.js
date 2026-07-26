@@ -18,6 +18,60 @@ describe('members', () => {
     expect(snap.data()).toEqual({ name: '슬기', weight: 1, excludedCategories: [], account: null });
   });
 
+  test('addMember stores an explicit weight and exclusion list as given', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    const { memberId } = await addMember(db, {
+      sessionToken: token, tripId: 't1', name: '슬기', weight: 0.5, excludedCategories: ['식비'],
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data()).toEqual({
+      name: '슬기', weight: 0.5, excludedCategories: ['식비'], account: null,
+    });
+  });
+
+  test('addMember rejects a non-numeric weight', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    // Stored as a string this makes every due/net figure in the report NaN.
+    await expect(addMember(db, {
+      sessionToken: token, tripId: 't1', name: '슬기', weight: 'abc',
+    })).rejects.toThrow('INVALID_WEIGHT');
+
+    const members = await db.collection('trips').doc('t1').collection('members').get();
+    expect(members.docs).toHaveLength(0);
+  });
+
+  test('addMember rejects a negative weight', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    await expect(addMember(db, {
+      sessionToken: token, tripId: 't1', name: '슬기', weight: -1,
+    })).rejects.toThrow('INVALID_WEIGHT');
+  });
+
+  test('addMember rejects excludedCategories that is not an array', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    // A truthy non-array sails through `|| []` and later crashes .includes(),
+    // breaking getReportData for the entire trip.
+    await expect(addMember(db, {
+      sessionToken: token, tripId: 't1', name: '슬기', excludedCategories: 5,
+    })).rejects.toThrow('INVALID_EXCLUDED_CATEGORIES');
+
+    await expect(addMember(db, {
+      sessionToken: token, tripId: 't1', name: '슬기', excludedCategories: '식비',
+    })).rejects.toThrow('INVALID_EXCLUDED_CATEGORIES');
+
+    const members = await db.collection('trips').doc('t1').collection('members').get();
+    expect(members.docs).toHaveLength(0);
+  });
+
   test('addMember rejects a duplicate name within the same trip', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });

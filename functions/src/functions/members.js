@@ -6,14 +6,24 @@ async function addMember(db, data) {
   const { tripId, name } = data;
   if (!name || !name.trim()) throw new Error('NAME_REQUIRED');
 
+  // Same validation as updateMember: a member created with a non-numeric weight
+  // turns every settlement figure into NaN, and a non-array excludedCategories
+  // (any truthy value survives `|| []`) crashes computeSettlement's .includes(),
+  // breaking the whole trip's report.
+  const weight = data.weight != null ? data.weight : 1;
+  if (typeof weight !== 'number' || weight < 0) throw new Error('INVALID_WEIGHT');
+
+  const excludedCategories = data.excludedCategories || [];
+  if (!Array.isArray(excludedCategories)) throw new Error('INVALID_EXCLUDED_CATEGORIES');
+
   const membersRef = db.collection('trips').doc(tripId).collection('members');
   const existing = await membersRef.where('name', '==', name).get();
   if (!existing.empty) throw new Error('NAME_TAKEN');
 
   const ref = await membersRef.add({
     name,
-    weight: data.weight != null ? data.weight : 1,
-    excludedCategories: data.excludedCategories || [],
+    weight,
+    excludedCategories,
     account: null,
   });
 
