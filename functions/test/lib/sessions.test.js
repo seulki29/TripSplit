@@ -53,6 +53,25 @@ describe('sessions', () => {
     const db = new FakeFirestore();
     await expect(createSession(db, { role: 'not-a-real-role' })).rejects.toThrow('INVALID_ROLE');
   });
+
+  test('createSession returns role, tripId, and memberId alongside the token', async () => {
+    const db = new FakeFirestore();
+    const result = await createSession(db, { role: 'member', tripId: 'trip1', memberId: 'm1' });
+    expect(result).toEqual({
+      token: result.token,
+      expiresAt: result.expiresAt,
+      role: 'member',
+      tripId: 'trip1',
+      memberId: 'm1',
+    });
+  });
+
+  test('createSession returns null tripId/memberId for a superadmin session', async () => {
+    const db = new FakeFirestore();
+    const result = await createSession(db, { role: 'superadmin' });
+    expect(result.tripId).toBeNull();
+    expect(result.memberId).toBeNull();
+  });
 });
 
 describe('revokeTripSessions', () => {

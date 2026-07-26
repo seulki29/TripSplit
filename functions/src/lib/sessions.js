@@ -18,7 +18,7 @@ async function createSession(db, { role, tripId = null, memberId = null }) {
   const token = generateToken();
   const expiresAt = Date.now() + SESSION_TTL_MS[role];
   await db.collection('sessions').doc(token).set({ role, tripId, memberId, expiresAt });
-  return { token, expiresAt };
+  return { token, expiresAt, role, tripId, memberId };
 }
 
 async function requireSession(db, token, allowedRoles, expectedTripId = null) {
