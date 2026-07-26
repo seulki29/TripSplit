@@ -1,6 +1,7 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { createSession } = require('../../src/lib/sessions');
 const { getReportData, perPersonCategoryAverage } = require('../../src/functions/report');
+const { computeSettlement } = require('../../src/lib/settlement');
 
 async function seedTrip(db, { id, group, status, members, expenses }) {
   await db.collection('trips').doc(id).set({
@@ -32,6 +33,25 @@ describe('perPersonCategoryAverage', () => {
 
     const { averages } = perPersonCategoryAverage(members, expenses);
     expect(averages['식비']).toBeUndefined();
+  });
+
+  test('uses headcount even when members have different settlement weights', () => {
+    const members = [
+      { id: 'a', name: 'A', weight: 2, excludedCategories: [] },
+      { id: 'b', name: 'B', weight: 1, excludedCategories: [] },
+    ];
+    const expenses = [{ category: '식비', amount: 90000, enteredBy: 'a', confirmed: true }];
+
+    const { averages } = perPersonCategoryAverage(members, expenses);
+    // headcount-based: 90000 / 2 members = 45000 (NOT weight-based)
+    expect(averages['식비']).toBe(45000);
+
+    const settlement = computeSettlement(members, expenses);
+    // weight-based: 90000 / (2+1) weight units = 30000 per unit -> a owes 60000, b owes 30000
+    expect(settlement.perMember.find((m) => m.id === 'a').due).toBe(60000);
+    expect(settlement.perMember.find((m) => m.id === 'b').due).toBe(30000);
+    // Confirm the two metrics genuinely diverge given unequal weights
+    expect(averages['식비']).not.toBe(settlement.perMember.find((m) => m.id === 'a').due);
   });
 });
 
