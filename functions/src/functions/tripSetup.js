@@ -15,10 +15,14 @@ async function updateTripSetup(db, data) {
   const snap = await ref.get();
   if (!snap.exists) throw new Error('TRIP_NOT_FOUND');
 
+  // A missing patch is treated as an empty patch: the save succeeds and
+  // changes no fields (it still counts as the first save for the status flip).
+  const patch = data.patch || {};
+
   const update = {};
-  if ('period' in data.patch) update.period = data.patch.period;
-  if ('location' in data.patch) update.location = data.patch.location;
-  if ('lodging' in data.patch) update.lodging = data.patch.lodging;
+  if ('period' in patch) update.period = patch.period;
+  if ('location' in patch) update.location = patch.location;
+  if ('lodging' in patch) update.lodging = patch.lodging;
 
   if (snap.data().status === 'setup') update.status = 'active';
 

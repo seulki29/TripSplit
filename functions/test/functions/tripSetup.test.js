@@ -81,4 +81,36 @@ describe('tripSetup', () => {
     expect(snap.data().adminPinHash).toBe('original-hash');
     expect(snap.data().location).toBe('속초');
   });
+
+  test('updateTripSetup treats a missing patch as an empty patch instead of crashing', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'active', location: '영월', lodging: '동강시스타' });
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+    const before = (await tripRef.get()).data();
+
+    await expect(updateTripSetup(db, {
+      sessionToken: token, tripId: tripRef.id, patch: undefined,
+    })).resolves.toEqual({ ok: true });
+
+    expect((await tripRef.get()).data()).toEqual(before);
+  });
+
+  test('a patch-less save on a setup trip still performs the documented first-save status flip', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db);
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+
+    await updateTripSetup(db, { sessionToken: token, tripId: tripRef.id });
+
+    expect((await tripRef.get()).data().status).toBe('active');
+  });
+
+  test('updateTripSetup rejects a trip that does not exist', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 'ghost' });
+
+    await expect(updateTripSetup(db, {
+      sessionToken: token, tripId: 'ghost', patch: { location: '영월' },
+    })).rejects.toThrow('TRIP_NOT_FOUND');
+  });
 });

@@ -38,6 +38,38 @@ describe('classifyReceipt', () => {
     await expect(call()).rejects.toThrow('RATE_LIMITED');
   });
 
+  test('rejects a missing photo or mimeType with MISSING_FIELDS, not a TypeError', async () => {
+    const db = new FakeFirestore();
+    const bucket = makeFakeBucket();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    await expect(classifyReceipt(db, bucket, 'fake-api-key', {
+      sessionToken: token, tripId: 't1', mimeType: 'image/jpeg',
+    })).rejects.toThrow('MISSING_FIELDS');
+
+    await expect(classifyReceipt(db, bucket, 'fake-api-key', {
+      sessionToken: token, tripId: 't1', photoBase64: 'aW1n',
+    })).rejects.toThrow('MISSING_FIELDS');
+
+    expect(bucket.saved).toHaveLength(0);
+  });
+
+  test('a malformed payload is rejected before it can spend a rate-limit slot', async () => {
+    const db = new FakeFirestore();
+    const bucket = makeFakeBucket();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    for (let i = 0; i < 10; i += 1) {
+      await expect(classifyReceipt(db, bucket, 'fake-api-key', {
+        sessionToken: token, tripId: 't1', mimeType: 'image/jpeg',
+      })).rejects.toThrow('MISSING_FIELDS');
+    }
+
+    await expect(classifyReceipt(db, bucket, 'fake-api-key', {
+      sessionToken: token, tripId: 't1', photoBase64: 'aW1n', mimeType: 'image/jpeg',
+    })).resolves.toBeDefined();
+  });
+
   test('rejects a session scoped to a different trip', async () => {
     const db = new FakeFirestore();
     const bucket = makeFakeBucket();

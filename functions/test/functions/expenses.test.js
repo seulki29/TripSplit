@@ -155,6 +155,22 @@ describe('expenses', () => {
       sessionToken: token, tripId: 't1', expenseId, patch: { amount: -500 },
     })).rejects.toThrow('INVALID_AMOUNT');
   });
+
+  test('updateExpense treats a missing patch as an empty patch instead of crashing', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+
+    await expect(updateExpense(db, {
+      sessionToken: token, tripId: 't1', expenseId, patch: undefined,
+    })).resolves.toEqual({ ok: true });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().amount).toBe(10000);
+    expect(snap.data().category).toBe('식비');
+  });
 });
 
 describe('deleteExpense', () => {

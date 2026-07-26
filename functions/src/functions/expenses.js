@@ -45,9 +45,8 @@ async function addExpense(db, data) {
 }
 
 async function updateExpense(db, data) {
-  const {
-    sessionToken, tripId, expenseId, patch,
-  } = data;
+  const { sessionToken, tripId, expenseId } = data;
+  const patch = data.patch || {};
   const session = await requireSession(db, sessionToken, ['admin', 'member'], tripId);
 
   const ref = db.collection('trips').doc(tripId).collection('expenses').doc(expenseId);
