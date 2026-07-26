@@ -1,0 +1,11 @@
+{
+  "name": "sfayw-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test public/test/"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  }
+}
