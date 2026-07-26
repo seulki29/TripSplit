@@ -26,6 +26,10 @@ async function updateTripSetup(db, data) {
 
   if (snap.data().status === 'setup') update.status = 'active';
 
+  // Firestore rejects an empty update map ("At least one field must be
+  // updated."), so a no-op patch on an already-active trip short-circuits.
+  if (Object.keys(update).length === 0) return { ok: true };
+
   await ref.update(update);
   return { ok: true };
 }

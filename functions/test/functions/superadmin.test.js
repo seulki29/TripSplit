@@ -184,6 +184,25 @@ describe('superadmin functions', () => {
     }
   });
 
+  test('updateTrip with a patch of only non-allowlisted fields is a no-op, not an empty write', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'superadmin' });
+    const { tripId } = await createTrip(db, {
+      sessionToken: token, name: 'A', slug: 'a', group: 'G', adminPin: '1111', memberPin: '2222',
+    });
+    const before = (await db.collection('trips').doc(tripId).get()).data();
+
+    // slug/createdAt/pin hashes are all outside the allowlist, so the update map
+    // ends up empty — and Firestore rejects update({}).
+    await expect(updateTrip(db, {
+      sessionToken: token, tripId, patch: { slug: 'stolen', adminPinHash: 'x', createdAt: 0 },
+    })).resolves.toEqual({ ok: true });
+
+    await expect(updateTrip(db, { sessionToken: token, tripId, patch: {} })).resolves.toEqual({ ok: true });
+
+    expect((await db.collection('trips').doc(tripId).get()).data()).toEqual(before);
+  });
+
   test('updateTrip treats a missing patch as an empty patch', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'superadmin' });

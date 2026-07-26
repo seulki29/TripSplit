@@ -83,6 +83,11 @@ async function updateTrip(db, data) {
     pinsChanged = true;
   }
 
+  // Firestore rejects an empty update map ("At least one field must be
+  // updated."), so a no-op patch has to short-circuit rather than write. No
+  // fields changed means no PIN changed either, so no sessions to revoke.
+  if (Object.keys(update).length === 0) return { ok: true };
+
   await ref.update(update);
   if (pinsChanged) await revokeTripSessions(db, tripId);
   return { ok: true };

@@ -82,6 +82,25 @@ describe('tripSetup', () => {
     expect(snap.data().location).toBe('속초');
   });
 
+  test('updateTripSetup with a patch of only non-allowlisted fields is a no-op, not an empty write', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'active', location: '영월', lodging: '동강시스타' });
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+    const before = (await tripRef.get()).data();
+
+    // The trip is already active, so there is no status flip to write either:
+    // the update map is empty and Firestore rejects update({}).
+    await expect(updateTripSetup(db, {
+      sessionToken: token, tripId: tripRef.id, patch: { status: 'setup', slug: 'stolen' },
+    })).resolves.toEqual({ ok: true });
+
+    await expect(updateTripSetup(db, {
+      sessionToken: token, tripId: tripRef.id, patch: {},
+    })).resolves.toEqual({ ok: true });
+
+    expect((await tripRef.get()).data()).toEqual(before);
+  });
+
   test('updateTripSetup treats a missing patch as an empty patch instead of crashing', async () => {
     const db = new FakeFirestore();
     const tripRef = await makeTrip(db, { status: 'active', location: '영월', lodging: '동강시스타' });

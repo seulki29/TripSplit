@@ -3,6 +3,17 @@ class FakeQuerySnapshot {
   get empty() { return this.docs.length === 0; }
 }
 
+/**
+ * Real Firestore refuses an empty update map, so the fake must too — otherwise
+ * a handler that builds an allowlisted update object and ends up with nothing
+ * in it looks fine in tests and throws in production.
+ */
+function assertNonEmptyUpdate(patch) {
+  if (!patch || Object.keys(patch).length === 0) {
+    throw new Error('At least one field must be updated.');
+  }
+}
+
 class FakeDocRef {
   constructor(store, path) {
     this.store = store;
@@ -20,6 +31,7 @@ class FakeDocRef {
   }
 
   async update(patch) {
+    assertNonEmptyUpdate(patch);
     const current = this.store.data.get(this.path) || {};
     this.store.data.set(this.path, { ...current, ...patch });
   }
@@ -80,6 +92,7 @@ class FakeTransaction {
   }
 
   update(ref, patch) {
+    assertNonEmptyUpdate(patch);
     const current = this.store.data.get(ref.path) || {};
     this.store.data.set(ref.path, { ...current, ...patch });
   }

@@ -56,6 +56,26 @@ describe('FakeFirestore', () => {
     expect((await db.collection('counters').doc('c2').get()).data()).toEqual({ count: 99 });
   });
 
+  test('update() rejects an empty map the way real Firestore does', async () => {
+    const db = new FakeFirestore();
+    const ref = db.collection('trips').doc('t1');
+    await ref.set({ name: 'Yeongwol' });
+
+    await expect(ref.update({})).rejects.toThrow('At least one field must be updated.');
+    await expect(ref.update(undefined)).rejects.toThrow('At least one field must be updated.');
+    expect((await ref.get()).data()).toEqual({ name: 'Yeongwol' });
+  });
+
+  test('tx.update() rejects an empty map the way real Firestore does', async () => {
+    const db = new FakeFirestore();
+    const ref = db.collection('trips').doc('t1');
+    await ref.set({ name: 'Yeongwol' });
+
+    await expect(db.runTransaction(async (tx) => tx.update(ref, {})))
+      .rejects.toThrow('At least one field must be updated.');
+    expect((await ref.get()).data()).toEqual({ name: 'Yeongwol' });
+  });
+
   test('runTransaction reports a missing document as not existing', async () => {
     const db = new FakeFirestore();
     const exists = await db.runTransaction(async (tx) => {

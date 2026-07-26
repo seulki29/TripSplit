@@ -159,6 +159,27 @@ describe('members', () => {
     expect(snap.data().account).toEqual({ bank: '국민', num: '123-456', holder: '슬기' });
   });
 
+  test('updateMember with a patch of only non-allowlisted fields is a no-op, not an empty write', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
+
+    // Everything here is dropped by the allowlist, leaving nothing to write.
+    // Firestore rejects update({}), so this must short-circuit instead.
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId, patch: { role: 'admin', bogus: 1 },
+    })).resolves.toEqual({ ok: true });
+
+    await expect(updateMember(db, {
+      sessionToken: token, tripId: 't1', memberId, patch: {},
+    })).resolves.toEqual({ ok: true });
+
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data()).toEqual({
+      name: '슬기', weight: 1, excludedCategories: [], account: null,
+    });
+  });
+
   test('updateMember treats a missing patch as an empty patch', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });

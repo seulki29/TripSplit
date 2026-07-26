@@ -51,6 +51,10 @@ async function updateMember(db, data) {
   }
   if (patch.account !== undefined) update.account = patch.account;
 
+  // Firestore rejects an empty update map ("At least one field must be
+  // updated."), so a no-op patch has to short-circuit rather than write.
+  if (Object.keys(update).length === 0) return { ok: true };
+
   await membersRef.doc(memberId).update(update);
   return { ok: true };
 }
