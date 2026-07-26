@@ -125,22 +125,35 @@ describe('listMembersForLogin', () => {
     await expect(listMembersForLogin(db, {})).rejects.toThrow('MISSING_FIELDS');
   });
 
-  test('is throttled by the shared login throttle (20 per window)', async () => {
+  test('is throttled by the shared login throttle (100 per window)', async () => {
     const db = new FakeFirestore();
     await makeTrip(db);
 
-    for (let i = 0; i < 20; i += 1) {
+    for (let i = 0; i < 100; i += 1) {
       await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).resolves.toEqual([]);
     }
 
     await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).rejects.toThrow('TOO_MANY_ATTEMPTS');
   });
 
+  test('a whole group opening the login page repeatedly is not locked out', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db);
+    await tripRef.collection('members').add({ name: '슬기', weight: 1, excludedCategories: [] });
+
+    // 10 members reloading the login page 5 times each at trip kickoff. This
+    // roster is a prerequisite for logging in at all, so throttling it away is a
+    // self-inflicted outage rather than a defence.
+    for (let i = 0; i < 50; i += 1) {
+      await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).resolves.toHaveLength(1);
+    }
+  });
+
   test('roster throttling does not consume the admin login budget for the same slug', async () => {
     const db = new FakeFirestore();
     await makeTrip(db);
 
-    for (let i = 0; i < 20; i += 1) {
+    for (let i = 0; i < 100; i += 1) {
       await listMembersForLogin(db, { slug: 'sfa-2026' });
     }
     await expect(listMembersForLogin(db, { slug: 'sfa-2026' })).rejects.toThrow('TOO_MANY_ATTEMPTS');

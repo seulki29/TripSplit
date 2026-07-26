@@ -69,7 +69,13 @@ async function listMembersForLogin(db, data) {
   const { slug } = data;
   if (!slug) throw new Error('MISSING_FIELDS');
 
-  await checkLoginThrottle(db, `roster:${slug}`, 20, 15 * 60 * 1000);
+  // Every member MUST fetch this roster to pick their name before they can even
+  // attempt a PIN, and there is no "success" here to reset the counter on — so a
+  // tight shared limit locks the whole group out of logging in, not just an
+  // attacker. 100 per 15 minutes leaves normal group traffic untouched while
+  // still making bulk scraping awkward; the payload is only {id, name} pairs, so
+  // over-fetching it is low-impact.
+  await checkLoginThrottle(db, `roster:${slug}`, 100, 15 * 60 * 1000);
 
   const trip = await findTripBySlug(db, slug);
   const membersSnap = await db.collection('trips').doc(trip.id).collection('members').get();
