@@ -2,12 +2,15 @@ import { callFunction } from '../api.js';
 import { setSession } from '../session.js';
 
 let currentTab = 'admin';
+let renderToken = 0;
 
 function mount(root, { slug }) {
   render(root, slug);
 }
 
 function render(root, slug) {
+  const myToken = ++renderToken;
+
   root.innerHTML = `
     <div class="container" style="max-width:360px;padding-top:4rem">
       <h2>여행 로그인</h2>
@@ -26,11 +29,17 @@ function render(root, slug) {
     });
   });
 
-  if (currentTab === 'admin') renderAdminForm(root, slug);
-  else renderMemberForm(root, slug);
+  if (currentTab === 'admin') renderAdminForm(root, slug, myToken);
+  else renderMemberForm(root, slug, myToken);
 }
 
-function renderAdminForm(root, slug) {
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function renderAdminForm(root, slug, myToken) {
   root.querySelector('#login-form').innerHTML = `
     <div class="field"><label class="label">관리자 PIN</label><input type="password" class="input" id="login-admin-pin"></div>
     <button type="button" class="btn btn-primary btn-block" id="login-admin-submit">입장</button>`;
@@ -41,12 +50,13 @@ function renderAdminForm(root, slug) {
       setSession({ token: result.token, expiresAt: result.expiresAt, role: 'admin', tripId: result.tripId ?? null, tripSlug: slug, memberId: null });
       location.href = `/t/${slug}/admin`;
     } catch (err) {
+      if (myToken !== renderToken) return;
       document.getElementById('login-error').textContent = err.message;
     }
   });
 }
 
-async function renderMemberForm(root, slug) {
+async function renderMemberForm(root, slug, myToken) {
   const formEl = root.querySelector('#login-form');
   formEl.innerHTML = `<p class="muted">구성원 목록을 불러오는 중...</p>`;
 
@@ -54,16 +64,19 @@ async function renderMemberForm(root, slug) {
   try {
     members = await callFunction('listMembersForLogin', { slug });
   } catch (err) {
+    if (myToken !== renderToken) return;
     formEl.innerHTML = `<p class="muted">${err.message}</p>`;
     return;
   }
+
+  if (myToken !== renderToken) return;
 
   formEl.innerHTML = `
     <div class="field">
       <label class="label">이름</label>
       <select class="input" id="login-member-select">
         <option value="">선택하세요</option>
-        ${members.map((m) => `<option value="${m.id}" data-name="${m.name}">${m.name}</option>`).join('')}
+        ${members.map((m) => `<option value="${m.id}" data-name="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('')}
       </select>
     </div>
     <div class="field"><label class="label">일반 PIN</label><input type="password" class="input" id="login-member-pin"></div>
@@ -81,6 +94,7 @@ async function renderMemberForm(root, slug) {
       setSession({ token: result.token, expiresAt: result.expiresAt, role: 'member', tripId: result.tripId ?? null, tripSlug: slug, memberId: result.memberId ?? null });
       location.href = `/t/${slug}`;
     } catch (err) {
+      if (myToken !== renderToken) return;
       document.getElementById('login-error').textContent = err.message;
     }
   });
