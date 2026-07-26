@@ -79,6 +79,24 @@ async function updateExpense(db, data) {
   return { ok: true };
 }
 
+async function deleteExpense(db, data) {
+  const { sessionToken, tripId, expenseId } = data;
+  const session = await requireSession(db, sessionToken, ['admin', 'member'], tripId);
+
+  const ref = db.collection('trips').doc(tripId).collection('expenses').doc(expenseId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('EXPENSE_NOT_FOUND');
+  const expense = snap.data();
+
+  if (session.role === 'member') {
+    if (expense.enteredBy !== session.memberId) throw new Error('FORBIDDEN');
+    if (expense.confirmed) throw new Error('EXPENSE_LOCKED');
+  }
+
+  await ref.delete();
+  return { ok: true };
+}
+
 async function confirmExpense(db, data) {
   const {
     sessionToken, tripId, expenseId, confirmed,
@@ -94,5 +112,5 @@ async function confirmExpense(db, data) {
 }
 
 module.exports = {
-  listExpenses, addExpense, updateExpense, confirmExpense,
+  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense,
 };

@@ -1,7 +1,7 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { createSession } = require('../../src/lib/sessions');
 const {
-  listExpenses, addExpense, updateExpense, confirmExpense,
+  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense,
 } = require('../../src/functions/expenses');
 
 describe('expenses', () => {
@@ -154,5 +154,97 @@ describe('expenses', () => {
     await expect(updateExpense(db, {
       sessionToken: token, tripId: 't1', expenseId, patch: { amount: -500 },
     })).rejects.toThrow('INVALID_AMOUNT');
+  });
+});
+
+describe('deleteExpense', () => {
+  test('a member can delete their own unconfirmed expense', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+
+    await expect(deleteExpense(db, { sessionToken: token, tripId: 't1', expenseId })).resolves.toEqual({ ok: true });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.exists).toBe(false);
+  });
+
+  test("a member cannot delete someone else's expense", async () => {
+    const db = new FakeFirestore();
+    const { token: mine } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { token: theirs } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm2' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: mine, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+
+    await expect(deleteExpense(db, {
+      sessionToken: theirs, tripId: 't1', expenseId,
+    })).rejects.toThrow('FORBIDDEN');
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.exists).toBe(true);
+  });
+
+  test('a member cannot delete their own expense once it is confirmed', async () => {
+    const db = new FakeFirestore();
+    const { token: member } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { token: admin } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: member, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+    await confirmExpense(db, { sessionToken: admin, tripId: 't1', expenseId, confirmed: true });
+
+    await expect(deleteExpense(db, {
+      sessionToken: member, tripId: 't1', expenseId,
+    })).rejects.toThrow('EXPENSE_LOCKED');
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.exists).toBe(true);
+  });
+
+  test('an admin can delete any expense regardless of who entered it or confirmation state', async () => {
+    const db = new FakeFirestore();
+    const { token: member } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { token: admin } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: member, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+    await confirmExpense(db, { sessionToken: admin, tripId: 't1', expenseId, confirmed: true });
+
+    await expect(deleteExpense(db, { sessionToken: admin, tripId: 't1', expenseId })).resolves.toEqual({ ok: true });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.exists).toBe(false);
+  });
+
+  test('deleting a nonexistent expense throws EXPENSE_NOT_FOUND', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    await expect(deleteExpense(db, {
+      sessionToken: token, tripId: 't1', expenseId: 'ghost',
+    })).rejects.toThrow('EXPENSE_NOT_FOUND');
+  });
+
+  test('rejects a session scoped to a different trip', async () => {
+    const db = new FakeFirestore();
+    const { token: t1 } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { token: t2 } = await createSession(db, { role: 'admin', tripId: 't2' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: t1, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+
+    await expect(deleteExpense(db, {
+      sessionToken: t2, tripId: 't1', expenseId,
+    })).rejects.toThrow('FORBIDDEN');
+  });
+
+  test('requires a session at all', async () => {
+    const db = new FakeFirestore();
+    await expect(deleteExpense(db, {
+      sessionToken: 'nope', tripId: 't1', expenseId: 'e1',
+    })).rejects.toThrow('UNAUTHENTICATED');
   });
 });

@@ -53,6 +53,7 @@ exports.updateMember = onCall(wrap(members.updateMember));
 exports.listExpenses = onCall(wrap(expenses.listExpenses));
 exports.addExpense = onCall(wrap(expenses.addExpense));
 exports.updateExpense = onCall(wrap(expenses.updateExpense));
+exports.deleteExpense = onCall(wrap(expenses.deleteExpense));
 exports.confirmExpense = onCall(wrap(expenses.confirmExpense));
 
 exports.classifyReceipt = onCall({ secrets: [geminiApiKey] }, async (request) => {
