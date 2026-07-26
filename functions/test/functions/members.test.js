@@ -1,6 +1,6 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { createSession } = require('../../src/lib/sessions');
-const { addMember, updateMember } = require('../../src/functions/members');
+const { addMember, updateMember, listMembers } = require('../../src/functions/members');
 
 describe('members', () => {
   test('addMember requires an admin session for the trip', async () => {
@@ -247,5 +247,31 @@ describe('members', () => {
     expect(snap.data()).toEqual({
       name: '슬기', weight: 1, excludedCategories: [], account: null,
     });
+  });
+
+  test('listMembers returns full member records for an admin session', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+    await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기', weight: 1.5, excludedCategories: ['식비'] });
+
+    const result = await listMembers(db, { sessionToken: token, tripId: 't1' });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('슬기');
+    expect(result[0].weight).toBe(1.5);
+    expect(result[0].excludedCategories).toEqual(['식비']);
+    expect(result[0].id).toBeDefined();
+  });
+
+  test('listMembers requires an admin session, not a member session', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    await expect(listMembers(db, { sessionToken: token, tripId: 't1' })).rejects.toThrow('FORBIDDEN');
+  });
+
+  test('listMembers rejects a session scoped to a different trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 'other-trip' });
+    await expect(listMembers(db, { sessionToken: token, tripId: 't1' })).rejects.toThrow('FORBIDDEN');
   });
 });

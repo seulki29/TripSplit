@@ -51,6 +51,7 @@ exports.updateTripSetup = onCall(wrap(tripSetup.updateTripSetup));
 
 exports.addMember = onCall(wrap(members.addMember));
 exports.updateMember = onCall(wrap(members.updateMember));
+exports.listMembers = onCall(wrap(members.listMembers));
 
 exports.listExpenses = onCall(wrap(expenses.listExpenses));
 exports.addExpense = onCall(wrap(expenses.addExpense));

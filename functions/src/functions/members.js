@@ -69,4 +69,11 @@ async function updateMember(db, data) {
   return { ok: true };
 }
 
-module.exports = { addMember, updateMember };
+async function listMembers(db, data) {
+  await requireSession(db, data.sessionToken, ['admin'], data.tripId);
+  const membersRef = db.collection('trips').doc(data.tripId).collection('members');
+  const snap = await membersRef.get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+module.exports = { addMember, updateMember, listMembers };
