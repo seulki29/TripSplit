@@ -3,6 +3,8 @@ const { checkRateLimit } = require('../lib/rateLimit');
 const { uploadReceiptImage } = require('../lib/storage');
 const { classifyReceiptImage } = require('../lib/geminiClient');
 
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png'];
+
 async function classifyReceipt(db, bucket, apiKey, data) {
   const {
     sessionToken, tripId, photoBase64, mimeType,
@@ -12,6 +14,7 @@ async function classifyReceipt(db, bucket, apiKey, data) {
   // Validate the payload before the rate-limit slot is spent and, more
   // importantly, before the Storage upload and the billable Gemini call.
   if (!photoBase64 || !mimeType) throw new Error('MISSING_FIELDS');
+  if (!ALLOWED_MIME_TYPES.includes(mimeType)) throw new Error('INVALID_MIME_TYPE');
 
   await checkRateLimit(db, sessionToken, 'classifyReceipt', 5, 60000);
 
@@ -21,4 +24,4 @@ async function classifyReceipt(db, bucket, apiKey, data) {
   return { photoUrl, ...classification };
 }
 
-module.exports = { classifyReceipt };
+module.exports = { classifyReceipt, ALLOWED_MIME_TYPES };

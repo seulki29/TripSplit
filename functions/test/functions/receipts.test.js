@@ -22,7 +22,37 @@ describe('classifyReceipt', () => {
 
     expect(result.category).toBe('식비');
     expect(result.photoUrl).toMatch(/^https:\/\/storage\.fake\/receipts\/t1\//);
+    expect(result.photoUrl).toContain('?expires=');
     expect(bucket.saved).toHaveLength(1);
+    expect(bucket.saved[0].opts).not.toHaveProperty('public');
+  });
+
+  test('rejects a mimeType outside the allowlist before uploading anything', async () => {
+    const db = new FakeFirestore();
+    const bucket = makeFakeBucket();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    for (const mimeType of ['image/svg+xml', 'application/pdf', 'text/html', 'image/heic']) {
+      await expect(classifyReceipt(db, bucket, 'fake-api-key', {
+        sessionToken: token, tripId: 't1', photoBase64: 'aW1n', mimeType,
+      })).rejects.toThrow('INVALID_MIME_TYPE');
+    }
+
+    expect(bucket.saved).toHaveLength(0);
+  });
+
+  test('accepts both allowlisted image types', async () => {
+    const db = new FakeFirestore();
+    const bucket = makeFakeBucket();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    for (const mimeType of ['image/jpeg', 'image/png']) {
+      await expect(classifyReceipt(db, bucket, 'fake-api-key', {
+        sessionToken: token, tripId: 't1', photoBase64: 'aW1n', mimeType,
+      })).resolves.toBeDefined();
+    }
+
+    expect(bucket.saved.map((s) => s.opts.metadata.contentType)).toEqual(['image/jpeg', 'image/png']);
   });
 
   test('is rate-limited after 5 calls within a minute', async () => {

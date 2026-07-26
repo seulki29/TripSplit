@@ -7,6 +7,9 @@ function makeFakeBucket() {
         async save(buffer, opts) {
           saved.push({ path, buffer, opts });
         },
+        async getSignedUrl(options) {
+          return [`https://storage.fake/${path}?expires=${options.expires}`];
+        },
         publicUrl() {
           return `https://storage.fake/${path}`;
         },
