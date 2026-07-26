@@ -110,4 +110,25 @@ describe('getReportData', () => {
 
     await expect(getReportData(db, { sessionToken: token, tripId: 'current' })).rejects.toThrow('FORBIDDEN');
   });
+
+  test('the settlement returned to the client balances to zero even for an indivisible total', async () => {
+    const db = new FakeFirestore();
+    await seedTrip(db, {
+      id: 'current',
+      group: 'SFA',
+      status: 'active',
+      members: [
+        { id: 'a', name: 'A', weight: 1, excludedCategories: [] },
+        { id: 'b', name: 'B', weight: 1, excludedCategories: [] },
+        { id: 'c', name: 'C', weight: 1, excludedCategories: [] },
+      ],
+      expenses: [{ category: '식비', amount: 100000, enteredBy: 'a', confirmed: true }],
+    });
+    const { token } = await createSession(db, { role: 'admin', tripId: 'current' });
+
+    const { settlement } = await getReportData(db, { sessionToken: token, tripId: 'current' });
+
+    expect(settlement.perMember.reduce((s, m) => s + m.due, 0)).toBe(settlement.totalConfirmed);
+    expect(settlement.perMember.reduce((s, m) => s + m.net, 0)).toBe(0);
+  });
 });

@@ -1,3 +1,29 @@
+/**
+ * Splits `total` into whole-KRW shares proportional to `weights` using the
+ * largest-remainder method, so the shares always add back up to `total`
+ * exactly — no leftover 원 and no overshoot.
+ *
+ * A weight sum of zero (every eligible member excluded from the category)
+ * allocates nothing, matching the documented all-excluded edge case.
+ */
+function allocateInteger(total, weights) {
+  const weightSum = weights.reduce((sum, w) => sum + w.weight, 0);
+  if (weightSum <= 0) return weights.map((w) => ({ id: w.id, amount: 0 }));
+
+  const raw = weights.map((w) => {
+    const exact = (total * w.weight) / weightSum;
+    return { id: w.id, floor: Math.floor(exact), remainder: exact - Math.floor(exact) };
+  });
+
+  const allocated = raw.reduce((sum, r) => sum + r.floor, 0);
+  const remaining = total - allocated;
+
+  const sortedByRemainder = [...raw].sort((a, b) => b.remainder - a.remainder);
+  const bumped = new Set(sortedByRemainder.slice(0, remaining).map((r) => r.id));
+
+  return raw.map((r) => ({ id: r.id, amount: r.floor + (bumped.has(r.id) ? 1 : 0) }));
+}
+
 function computeSettlement(members, expenses) {
   const confirmed = expenses.filter((e) => e.confirmed);
 
@@ -10,16 +36,11 @@ function computeSettlement(members, expenses) {
   for (const m of members) dueByMember[m.id] = 0;
 
   for (const category of Object.keys(categoryTotals)) {
-    const weightSum = members.reduce((sum, m) => {
-      if (m.excludedCategories.includes(category)) return sum;
-      return sum + m.weight;
-    }, 0);
-    if (weightSum <= 0) continue;
-
-    const perWeightUnit = categoryTotals[category] / weightSum;
-    for (const m of members) {
-      if (m.excludedCategories.includes(category)) continue;
-      dueByMember[m.id] += perWeightUnit * m.weight;
+    const eligible = members.filter((m) => !m.excludedCategories.includes(category));
+    const weights = eligible.map((m) => ({ id: m.id, weight: m.weight }));
+    const allocation = allocateInteger(categoryTotals[category], weights);
+    for (const a of allocation) {
+      dueByMember[a.id] += a.amount;
     }
   }
 
@@ -34,12 +55,12 @@ function computeSettlement(members, expenses) {
   const perMember = members.map((m) => ({
     id: m.id,
     name: m.name,
-    due: Math.round(dueByMember[m.id] || 0),
-    paid: Math.round(paidByMember[m.id] || 0),
-    net: Math.round((paidByMember[m.id] || 0) - (dueByMember[m.id] || 0)),
+    due: dueByMember[m.id] || 0,
+    paid: paidByMember[m.id] || 0,
+    net: (paidByMember[m.id] || 0) - (dueByMember[m.id] || 0),
   }));
 
   return { categoryTotals, totalConfirmed, perMember };
 }
 
-module.exports = { computeSettlement };
+module.exports = { computeSettlement, allocateInteger };
