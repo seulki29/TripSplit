@@ -66,4 +66,14 @@ describe('ui.js', () => {
     container.querySelectorAll('.chip')[1].click();
     assert.equal(selected, '식비');
   });
+
+  test('clicking inside the modal box does not close the modal', () => {
+    openModal('제목', '내용');
+    document.querySelector('.modal-box').click();
+    assert.equal(document.getElementById('modal-overlay').classList.contains('open'), true);
+  });
+
+  test('closeModal does nothing and does not throw when no modal has ever been opened', () => {
+    assert.doesNotThrow(() => closeModal());
+  });
 });
