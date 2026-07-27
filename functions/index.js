@@ -91,3 +91,4 @@ exports.classifyReceipt = onCall({ secrets: [geminiApiKey] }, async (request) =>
 exports.getReceiptUrl = onCall(wrapWithBucket(receipts.getReceiptUrl));
 
 exports.getReportData = onCall(wrap(report.getReportData));
+exports.listReceiptUrls = onCall(wrapWithBucket(report.listReceiptUrls));

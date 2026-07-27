@@ -1,5 +1,6 @@
 const { requireSession } = require('../lib/sessions');
-const { computeSettlement } = require('../lib/settlement');
+const { computeSettlement, allocateInteger } = require('../lib/settlement');
+const { getReceiptReadUrl } = require('../lib/storage');
 
 async function loadTripBundle(db, tripId) {
   const membersSnap = await db.collection('trips').doc(tripId).collection('members').get();
@@ -9,20 +10,33 @@ async function loadTripBundle(db, tripId) {
   return { members, expenses };
 }
 
+// Per-person category spend under the per-expense exclusion model: each
+// confirmed expense's amount is split by weight among non-excluded members,
+// bucketed by the expense's category; the average divides each category's
+// total due by the number of members who owe anything in the trip.
 function perPersonCategoryAverage(members, expenses) {
   const confirmed = expenses.filter((e) => e.confirmed);
-  const categoryTotals = {};
+  const categoryDue = {};
+  const memberHasDue = new Set();
+
   for (const e of confirmed) {
-    categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+    const excluded = new Set(e.excludedMembers || []);
+    const eligible = members.filter((m) => !excluded.has(m.id));
+    const allocation = allocateInteger(e.amount, eligible.map((m) => ({ id: m.id, weight: m.weight })));
+    for (const a of allocation) {
+      if (a.amount > 0) memberHasDue.add(a.id);
+      categoryDue[e.category] = (categoryDue[e.category] || 0) + a.amount;
+    }
   }
 
+  const headcount = memberHasDue.size;
   const averages = {};
-  for (const category of Object.keys(categoryTotals)) {
-    const headcount = members.filter((m) => !(m.excludedCategories || []).includes(category)).length;
-    if (headcount > 0) averages[category] = categoryTotals[category] / headcount;
+  if (headcount > 0) {
+    for (const category of Object.keys(categoryDue)) {
+      averages[category] = categoryDue[category] / headcount;
+    }
   }
-
-  return { categoryTotals, averages };
+  return { averages };
 }
 
 async function getReportData(db, data) {
@@ -35,6 +49,12 @@ async function getReportData(db, data) {
 
   const { members, expenses } = await loadTripBundle(db, tripId);
   const settlement = computeSettlement(members, expenses);
+  const byId = Object.fromEntries(members.map((m) => [m.id, m]));
+  settlement.perMember = settlement.perMember.map((pm) => ({
+    ...pm,
+    account: byId[pm.id]?.account ?? null,
+    settled: byId[pm.id]?.settled ?? false,
+  }));
   const { averages: currentCategoryAverages } = perPersonCategoryAverage(members, expenses);
 
   const otherTripsSnap = await db.collection('trips')
@@ -72,4 +92,20 @@ async function getReportData(db, data) {
   };
 }
 
-module.exports = { getReportData, perPersonCategoryAverage };
+async function listReceiptUrls(db, bucket, data) {
+  const { sessionToken, tripId } = data;
+  await requireSession(db, sessionToken, ['admin', 'member'], tripId);
+
+  const snap = await db.collection('trips').doc(tripId).collection('expenses').get();
+  const withPhotos = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((e) => e.confirmed && e.photoPath);
+
+  const urls = await Promise.all(withPhotos.map(async (e) => ({
+    expenseId: e.id,
+    url: await getReceiptReadUrl(bucket, e.photoPath),
+  })));
+  return { urls };
+}
+
+module.exports = { getReportData, perPersonCategoryAverage, listReceiptUrls };

@@ -62,8 +62,8 @@ async function verifyMemberPin(db, data) {
 
 /**
  * Public endpoint: the member names a visitor can pick from before logging in.
- * Deliberately returns ONLY {id, name} — no weight, excludedCategories or
- * account data may leak to an unauthenticated caller.
+ * Deliberately returns ONLY {id, name} — no weight, account, or settled
+ * data may leak to an unauthenticated caller.
  */
 async function listMembersForLogin(db, data) {
   const { slug } = data;
