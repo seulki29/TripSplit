@@ -72,6 +72,13 @@ describe('sessions', () => {
     expect(result.tripId).toBeNull();
     expect(result.memberId).toBeNull();
   });
+
+  test('stores a ttlAt Timestamp matching expiresAt for the Firestore TTL policy', async () => {
+    const db = new FakeFirestore();
+    const { token, expiresAt } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const stored = (await db.collection('sessions').doc(token).get()).data();
+    expect(stored.ttlAt.toMillis()).toBe(expiresAt);
+  });
 });
 
 describe('revokeTripSessions', () => {

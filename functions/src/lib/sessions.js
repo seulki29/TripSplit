@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { Timestamp } = require('firebase-admin/firestore');
 
 const SESSION_TTL_MS = {
   superadmin: 12 * 60 * 60 * 1000,
@@ -17,7 +18,9 @@ async function createSession(db, { role, tripId = null, memberId = null }) {
 
   const token = generateToken();
   const expiresAt = Date.now() + SESSION_TTL_MS[role];
-  await db.collection('sessions').doc(token).set({ role, tripId, memberId, expiresAt });
+  await db.collection('sessions').doc(token).set({
+    role, tripId, memberId, expiresAt, ttlAt: Timestamp.fromMillis(expiresAt),
+  });
   return { token, expiresAt, role, tripId, memberId };
 }
 
