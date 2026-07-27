@@ -1,12 +1,21 @@
-// Usage (from the functions/ directory), pipe the hash straight into the
-// secret so there is no copy-paste that could corrupt it:
-//   node scripts/hash-password.js | npx firebase-tools@14 functions:secrets:set SUPERADMIN_PASSWORD_HASH --data-file - --project sfayw-10d11
-// The "Password:" prompt is written to stderr; ONLY the 60-char bcrypt hash
-// is written to stdout, so the pipe carries nothing but the hash.
+// Hash a superadmin password with bcrypt. Run STANDALONE (no pipe) so the
+// interactive password prompt reads from the real console — inside a shell
+// pipeline the prompt cannot read your keystrokes and you end up hashing the
+// wrong (often empty) string.
+//
+// Recommended flow (from the functions/ directory):
+//   node scripts/hash-password.js newhash.txt          # type password -> writes hash to newhash.txt
+//   node scripts/check-password.js newhash.txt          # type SAME password -> must print MATCH
+//   npx firebase-tools@14 functions:secrets:set SUPERADMIN_PASSWORD_HASH --data-file newhash.txt --project sfayw-10d11
+//
+// With no file argument the hash is written to stdout instead.
+const fs = require('fs');
 const readline = require('readline');
 const bcrypt = require('bcryptjs');
 
-// output -> stderr keeps the prompt off stdout so stdout is hash-only.
+const outPath = process.argv[2];
+
+// output -> stderr keeps the prompt off stdout so a redirected stdout is hash-only.
 const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
 rl.question('Password: ', async (password) => {
   rl.close();
@@ -14,5 +23,11 @@ rl.question('Password: ', async (password) => {
     process.stderr.write('Empty password — nothing hashed.\n');
     process.exit(1);
   }
-  process.stdout.write(await bcrypt.hash(password, 10));
+  const hash = await bcrypt.hash(password, 10);
+  if (outPath) {
+    fs.writeFileSync(outPath, hash, 'utf8');
+    process.stderr.write(`Hash written to ${outPath}\n`);
+  } else {
+    process.stdout.write(hash);
+  }
 });
