@@ -35,10 +35,11 @@ function computeSettlement(members, expenses) {
   const dueByMember = {};
   for (const m of members) dueByMember[m.id] = 0;
 
-  for (const category of Object.keys(categoryTotals)) {
-    const eligible = members.filter((m) => !m.excludedCategories.includes(category));
+  for (const e of confirmed) {
+    const excluded = new Set(e.excludedMembers || []);
+    const eligible = members.filter((m) => !excluded.has(m.id));
     const weights = eligible.map((m) => ({ id: m.id, weight: m.weight }));
-    const allocation = allocateInteger(categoryTotals[category], weights);
+    const allocation = allocateInteger(e.amount, weights);
     for (const a of allocation) {
       dueByMember[a.id] += a.amount;
     }
