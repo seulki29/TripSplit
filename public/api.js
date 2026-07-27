@@ -1,8 +1,7 @@
 import { getSession, clearSession } from './session.js';
 
-const REGION = 'us-central1';
-// NOTE: replace 'sfayw-prod' with the real deployed project id in Plan 3.
-const PROD_PROJECT_ID = 'sfayw-prod';
+const REGION = 'asia-northeast3';
+const PROD_PROJECT_ID = 'sfayw-10d11';
 
 function functionsBaseUrl() {
   const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';

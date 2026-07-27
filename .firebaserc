@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-sfayw"
+    "default": "demo-sfayw",
+    "prod": "sfayw-10d11"
   }
 }

@@ -1,11 +1,17 @@
 const { onCall } = require('firebase-functions/v2/https');
+const { setGlobalOptions } = require('firebase-functions/v2');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 
-// NOTE: replace 'demo-sfayw.appspot.com' with the real deployed storage bucket in Plan 3.
-// Production signed URLs additionally require the function service account to have the
-// Service Account Token Creator role (iam.serviceAccounts.signBlob).
-admin.initializeApp({ storageBucket: 'demo-sfayw.appspot.com' });
+setGlobalOptions({ region: 'asia-northeast3' });
+
+// Under the emulator the demo project needs its bucket named explicitly; in
+// production initializeApp() resolves the project's default bucket on its own.
+if (process.env.FUNCTIONS_EMULATOR) {
+  admin.initializeApp({ storageBucket: 'demo-sfayw.appspot.com' });
+} else {
+  admin.initializeApp();
+}
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
 

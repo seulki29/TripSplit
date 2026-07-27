@@ -100,7 +100,7 @@ describe('callFunction', () => {
     globalThis.fetch = fetchMock;
     await callFunction('listTrips', {});
     const [url] = fetchMock.mock.calls[0].arguments;
-    assert.match(url, /^http:\/\/127\.0\.0\.1:5001\/demo-sfayw\/us-central1\/listTrips$/);
+    assert.match(url, /^http:\/\/127\.0\.0\.1:5001\/demo-sfayw\/asia-northeast3\/listTrips$/);
   });
 
   test('throws a clean INTERNAL error if the response body is not valid JSON', async () => {
