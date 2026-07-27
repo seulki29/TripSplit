@@ -6,7 +6,7 @@ const PROMPT = `이 영수증 이미지를 분석해서 아래 JSON 형식으로
 
 async function classifyReceiptImage(base64Image, mimeType, apiKey, fetchImpl = fetch) {
   const res = await fetchImpl(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
