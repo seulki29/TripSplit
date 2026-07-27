@@ -25,11 +25,14 @@ function renderLogin(root) {
 
   document.getElementById('sa-login-btn').addEventListener('click', async () => {
     const password = document.getElementById('sa-password').value;
+    const btn = document.getElementById('sa-login-btn');
+    btn.disabled = true; btn.textContent = '로그인 중...';
     try {
       const result = await callFunction('verifySuperadminPassword', { password });
       setSession({ token: result.token, expiresAt: result.expiresAt, role: 'superadmin', tripId: null, tripSlug: null, memberId: null });
       renderDashboard(root);
     } catch (err) {
+      btn.disabled = false; btn.textContent = '로그인';
       document.getElementById('sa-error').textContent = err.message;
     }
   });

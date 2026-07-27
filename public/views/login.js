@@ -40,12 +40,15 @@ function renderAdminForm(root, slug, myToken) {
     <button type="button" class="btn btn-primary btn-block" id="login-admin-submit">입장</button>`;
 
   document.getElementById('login-admin-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('login-admin-submit');
+    btn.disabled = true; btn.textContent = '입장 중...';
     try {
       const result = await callFunction('verifyAdminPin', { slug, pin: document.getElementById('login-admin-pin').value });
       setSession({ token: result.token, expiresAt: result.expiresAt, role: 'admin', tripId: result.tripId ?? null, tripSlug: slug, memberId: null });
       location.href = `/t/${slug}/admin`;
     } catch (err) {
       if (myToken !== renderToken) return;
+      btn.disabled = false; btn.textContent = '입장';
       document.getElementById('login-error').textContent = err.message;
     }
   });
@@ -84,12 +87,15 @@ async function renderMemberForm(root, slug, myToken) {
       document.getElementById('login-error').textContent = '이름을 선택해주세요.';
       return;
     }
+    const btn = document.getElementById('login-member-submit');
+    btn.disabled = true; btn.textContent = '입장 중...';
     try {
       const result = await callFunction('verifyMemberPin', { slug, name, pin: document.getElementById('login-member-pin').value });
       setSession({ token: result.token, expiresAt: result.expiresAt, role: 'member', tripId: result.tripId ?? null, tripSlug: slug, memberId: result.memberId ?? null });
       location.href = `/t/${slug}`;
     } catch (err) {
       if (myToken !== renderToken) return;
+      btn.disabled = false; btn.textContent = '입장';
       document.getElementById('login-error').textContent = err.message;
     }
   });
