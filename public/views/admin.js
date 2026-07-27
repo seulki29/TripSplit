@@ -7,6 +7,7 @@ const CATEGORIES = ['숙박', '식비', '장보기', '교통비'];
 let currentTab = 'setup';
 let membersCache = [];
 let renderToken = 0;
+let exclusionMode = false;
 
 function mount(root, { slug }) {
   const session = getSession();
@@ -156,13 +157,22 @@ async function renderExpensesTab(body, slug, myToken) {
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
 
   body.innerHTML = `
-    <button type="button" class="btn btn-primary" id="expense-add" style="margin-bottom:1rem">경비 입력</button>
+    <div style="margin-bottom:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+      <button type="button" class="btn btn-primary" id="expense-add">경비 입력</button>
+      <button type="button" class="btn btn-secondary" id="expense-exclusion-toggle">${exclusionMode ? '제외설정 취소' : '제외설정'}</button>
+    </div>
+    ${exclusionMode ? `
+      <div class="card" style="margin-bottom:1rem;display:flex;gap:0.5rem;align-items:center">
+        <button type="button" class="btn btn-primary" id="expense-exclusion-apply">제외 구성원 지정</button>
+        <button type="button" class="btn btn-secondary" id="expense-exclusion-cancel">취소</button>
+      </div>` : ''}
     <div id="expenses-list"></div>`;
 
   document.getElementById('expenses-list').innerHTML = expenses.map((e) => `
     <div class="card" style="margin-bottom:0.6rem">
       <div style="display:flex;justify-content:space-between">
         <div>
+          ${exclusionMode ? `<input type="checkbox" class="excl-check" data-id="${e.id}" style="margin-right:0.5rem">` : ''}
           <span class="tag">${e.category}</span>
           <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
           <span class="muted" style="font-size:12px;margin-left:0.5rem">${escapeHtml(e.date)} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
@@ -175,6 +185,7 @@ async function renderExpensesTab(body, slug, myToken) {
         </div>
       </div>
       <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}</p>
+      ${e.excludedMembers && e.excludedMembers.length ? `<p class="muted" style="font-size:12px">제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</p>` : ''}
     </div>`).join('');
 
   body.querySelectorAll('.expense-confirm').forEach((btn) => {
@@ -208,6 +219,58 @@ async function renderExpensesTab(body, slug, myToken) {
     });
   });
   document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members));
+
+  document.getElementById('expense-exclusion-toggle').addEventListener('click', () => {
+    exclusionMode = !exclusionMode;
+    renderExpensesTab(body, slug, myToken);
+  });
+
+  if (exclusionMode) {
+    document.getElementById('expense-exclusion-cancel').addEventListener('click', () => {
+      exclusionMode = false;
+      renderExpensesTab(body, slug, myToken);
+    });
+    document.getElementById('expense-exclusion-apply').addEventListener('click', () => {
+      const checkedIds = [...body.querySelectorAll('.excl-check:checked')].map((c) => c.dataset.id);
+      if (checkedIds.length === 0) {
+        showToast('경비를 선택해주세요', 'error');
+        return;
+      }
+      openExclusionModal(body, slug, members, expenses, checkedIds);
+    });
+  }
+}
+
+function openExclusionModal(body, slug, members, expenses, checkedIds) {
+  let preCheckedIds = [];
+  if (checkedIds.length === 1) {
+    const target = expenses.find((e) => e.id === checkedIds[0]);
+    preCheckedIds = target?.excludedMembers || [];
+  }
+
+  openModal('제외 구성원 지정', `
+    ${members.map((m) => `<label style="display:block"><input type="checkbox" class="excl-member" value="${m.id}" ${preCheckedIds.includes(m.id) ? 'checked' : ''}> ${escapeHtml(m.name)}</label>`).join('')}
+    <button type="button" class="btn btn-primary btn-block" id="excl-apply" style="margin-top:1rem">적용</button>
+    <p class="muted" id="excl-error" style="margin-top:0.5rem;font-size:13px"></p>
+  `);
+
+  document.getElementById('excl-apply').addEventListener('click', async () => {
+    const session = getSession();
+    const btn = document.getElementById('excl-apply');
+    const pickedMemberIds = [...document.querySelectorAll('.excl-member:checked')].map((c) => c.value);
+    btn.disabled = true; btn.textContent = '적용 중...';
+    try {
+      await callFunction('setExpenseExclusions', { tripId: session.tripId, expenseIds: checkedIds, excludedMemberIds: pickedMemberIds });
+      closeModal();
+      exclusionMode = false;
+      await renderExpensesTab(body, slug, renderToken);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = '적용';
+      const errEl = document.getElementById('excl-error');
+      if (errEl) errEl.textContent = err.message;
+      showToast(err.message, 'error');
+    }
+  });
 }
 
 function openAdminExpenseModal(body, slug, members) {
