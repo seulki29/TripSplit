@@ -62,6 +62,7 @@ async function loadExpenses(root, slug) {
           ${canEdit ? `<button type="button" class="btn btn-secondary member-delete" data-id="${e.id}">삭제</button>` : ''}
         </div>
         <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}</p>
+        ${e.excludedMembers && e.excludedMembers.length ? `<p class="muted" style="font-size:12px">제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</p>` : ''}
       </div>`;
   }).join('');
 
