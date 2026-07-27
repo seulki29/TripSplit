@@ -98,7 +98,7 @@ function renderMembersList(body, slug) {
     <div class="card" style="margin-bottom:0.6rem;display:flex;justify-content:space-between;align-items:center">
       <div>
         <strong>${escapeHtml(m.name)}</strong>
-        <span class="muted" style="font-size:12px;margin-left:0.5rem">가중치 ${m.weight}${m.excludedCategories.length ? ' · 제외: ' + escapeHtml(m.excludedCategories.join(', ')) : ''}</span>
+        <span class="muted" style="font-size:12px;margin-left:0.5rem">가중치 ${m.weight}${m.account ? ' · 계좌 ' + escapeHtml(m.account) : ''}</span>
       </div>
       <button type="button" class="btn btn-secondary member-edit" data-id="${m.id}">수정</button>
     </div>`).join('');
@@ -113,35 +113,23 @@ function openMemberModal(body, slug, member) {
   openModal(isEdit ? '구성원 수정' : '구성원 추가', `
     <div class="field"><label class="label">이름</label><input class="input" id="mm-name" value="${escapeHtml(member?.name || '')}"></div>
     <div class="field"><label class="label">정산 가중치</label><input type="number" step="0.1" class="input" id="mm-weight" value="${member?.weight ?? 1}"></div>
-    <div class="field">
-      <label class="label">제외 카테고리</label>
-      <div id="mm-excluded"></div>
-    </div>
+    <div class="field"><label class="label">계좌 (선택)</label><input class="input" id="mm-account" value="${escapeHtml(member?.account || '')}"></div>
     <button type="button" class="btn btn-primary btn-block" id="mm-submit">${isEdit ? '저장' : '추가'}</button>
     <p class="muted" id="mm-error" style="margin-top:0.5rem;font-size:13px"></p>
   `);
 
-  let excluded = new Set(member?.excludedCategories || []);
-  function renderExcludedChips() {
-    document.querySelectorAll('#mm-excluded .chip').forEach((chip) => {
-      chip.classList.toggle('chip-selected', excluded.has(chip.textContent));
-    });
-  }
-  renderChipGroup(document.getElementById('mm-excluded'), CATEGORIES, null, (category) => {
-    if (excluded.has(category)) excluded.delete(category); else excluded.add(category);
-    renderExcludedChips();
-  });
-  renderExcludedChips();
-
   document.getElementById('mm-submit').addEventListener('click', async () => {
     const session = getSession();
+    const btn = document.getElementById('mm-submit');
     const name = document.getElementById('mm-name').value;
     const weight = Number(document.getElementById('mm-weight').value);
+    const account = document.getElementById('mm-account').value.trim();
+    btn.disabled = true; btn.textContent = '저장 중...';
     try {
       if (isEdit) {
-        await callFunction('updateMember', { tripId: session.tripId, memberId: member.id, patch: { name, weight, excludedCategories: [...excluded] } });
+        await callFunction('updateMember', { tripId: session.tripId, memberId: member.id, patch: { name, weight, account } });
       } else {
-        await callFunction('addMember', { tripId: session.tripId, name, weight, excludedCategories: [...excluded] });
+        await callFunction('addMember', { tripId: session.tripId, name, weight, account });
       }
       closeModal();
       try {
@@ -151,6 +139,7 @@ function openMemberModal(body, slug, member) {
         showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
       }
     } catch (err) {
+      btn.disabled = false; btn.textContent = isEdit ? '저장' : '추가';
       document.getElementById('mm-error').textContent = err.message;
     }
   });
