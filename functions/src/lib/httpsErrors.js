@@ -25,7 +25,7 @@ function toHttpsError(err) {
   if (message === 'RATE_LIMITED' || message === 'TOO_MANY_ATTEMPTS') {
     return new HttpsError('resource-exhausted', message);
   }
-  if (message.endsWith('_NOT_FOUND')) {
+  if (message.endsWith('_NOT_FOUND') || message === 'NO_PHOTO') {
     return new HttpsError('not-found', message);
   }
   if (DOMAIN_ERROR_CODES.has(message)) {

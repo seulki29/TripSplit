@@ -41,6 +41,12 @@ describe('toHttpsError', () => {
     }
   });
 
+  test('maps NO_PHOTO to not-found', () => {
+    const err = toHttpsError(new Error('NO_PHOTO'));
+    expect(err.code).toBe('not-found');
+    expect(err.message).toBe('NO_PHOTO');
+  });
+
   test('maps validation errors to invalid-argument', () => {
     const codes = [
       'INVALID_PASSWORD', 'INVALID_PIN', 'MISSING_FIELDS', 'SLUG_TAKEN', 'NAME_REQUIRED',
