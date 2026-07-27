@@ -17,6 +17,14 @@ function isValidPhotoPath(tripId, photoPath) {
   return PHOTO_PATH_SUFFIX_RE.test(photoPath.slice(prefix.length));
 }
 
+async function validateMemberIds(db, tripId, ids) {
+  if (!Array.isArray(ids)) throw new Error('INVALID_EXCLUDED_MEMBERS');
+  if (ids.length === 0) return;
+  const membersRef = db.collection('trips').doc(tripId).collection('members');
+  const snaps = await Promise.all(ids.map((id) => membersRef.doc(id).get()));
+  if (snaps.some((s) => !s.exists)) throw new Error('INVALID_EXCLUDED_MEMBERS');
+}
+
 async function listExpenses(db, data) {
   await requireSession(db, data.sessionToken, ['admin', 'member'], data.tripId);
   const snap = await db.collection('trips').doc(data.tripId).collection('expenses').get();
@@ -32,6 +40,9 @@ async function addExpense(db, data) {
   if (!CATEGORIES.includes(category)) throw new Error('INVALID_CATEGORY');
   if (!(Number(amount) > 0)) throw new Error('INVALID_AMOUNT');
   if (photoPath && !isValidPhotoPath(tripId, photoPath)) throw new Error('INVALID_PHOTO_PATH');
+
+  const excludedMembers = data.excludedMembers || [];
+  await validateMemberIds(db, tripId, excludedMembers);
 
   let enteredBy;
   if (session.role === 'member') {
@@ -52,6 +63,7 @@ async function addExpense(db, data) {
     enteredBy,
     recordedBy: session.role,
     photoPath: photoPath || null,
+    excludedMembers,
     confirmed: false,
     confirmedAt: null,
     createdAt: Date.now(),
@@ -93,6 +105,10 @@ async function updateExpense(db, data) {
       throw new Error('INVALID_PHOTO_PATH');
     }
     update.photoPath = patch.photoPath;
+  }
+  if ('excludedMembers' in patch) {
+    await validateMemberIds(db, tripId, patch.excludedMembers);
+    update.excludedMembers = patch.excludedMembers;
   }
 
   update.updatedAt = Date.now();
@@ -137,6 +153,25 @@ async function confirmExpense(db, data) {
   return { ok: true };
 }
 
+async function setExpenseExclusions(db, data) {
+  const {
+    sessionToken, tripId, expenseIds, excludedMemberIds,
+  } = data;
+  await requireSession(db, sessionToken, ['admin'], tripId);
+
+  if (!Array.isArray(expenseIds)) throw new Error('EXPENSE_NOT_FOUND');
+  await validateMemberIds(db, tripId, excludedMemberIds);
+
+  const expensesRef = db.collection('trips').doc(tripId).collection('expenses');
+  const snaps = await Promise.all(expenseIds.map((id) => expensesRef.doc(id).get()));
+  if (snaps.some((s) => !s.exists)) throw new Error('EXPENSE_NOT_FOUND');
+
+  await Promise.all(expenseIds.map((id) => expensesRef.doc(id).update({
+    excludedMembers: excludedMemberIds, updatedAt: Date.now(),
+  })));
+  return { ok: true };
+}
+
 module.exports = {
-  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense,
+  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense, setExpenseExclusions,
 };

@@ -2,7 +2,7 @@ const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { makeFakeBucket } = require('../helpers/fakeBucket');
 const { createSession } = require('../../src/lib/sessions');
 const {
-  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense,
+  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense, setExpenseExclusions,
 } = require('../../src/functions/expenses');
 
 describe('expenses', () => {
@@ -372,5 +372,140 @@ describe('deleteExpense', () => {
       .set({ enteredBy: 'm1', confirmed: false, photoPath: null });
     await deleteExpense(db, bucket, { sessionToken: adminToken, tripId: 'trip1', expenseId: 'e1' });
     expect(bucket.deleted).toEqual([]);
+  });
+});
+
+describe('excludedMembers on expenses', () => {
+  test('addExpense defaults excludedMembers to []', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01',
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().excludedMembers).toEqual([]);
+  });
+
+  test('addExpense accepts a valid excludedMembers array', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    await db.collection('trips').doc('t1').collection('members').doc('m2').set({ name: 'M2' });
+
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01', excludedMembers: ['m2'],
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().excludedMembers).toEqual(['m2']);
+  });
+
+  test('addExpense rejects an excludedMembers id not in the trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    await expect(addExpense(db, {
+      sessionToken: token, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01', excludedMembers: ['ghost'],
+    })).rejects.toThrow('INVALID_EXCLUDED_MEMBERS');
+  });
+
+  test('updateExpense accepts a valid excludedMembers patch', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    await db.collection('trips').doc('t1').collection('members').doc('m2').set({ name: 'M2' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01',
+    });
+
+    await updateExpense(db, {
+      sessionToken: token, tripId: 't1', expenseId, patch: { excludedMembers: ['m2'] },
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().excludedMembers).toEqual(['m2']);
+  });
+
+  test('updateExpense rejects an excludedMembers id not in the trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01',
+    });
+
+    await expect(updateExpense(db, {
+      sessionToken: token, tripId: 't1', expenseId, patch: { excludedMembers: ['ghost'] },
+    })).rejects.toThrow('INVALID_EXCLUDED_MEMBERS');
+  });
+});
+
+describe('setExpenseExclusions', () => {
+  async function seedTrip() {
+    const db = new FakeFirestore();
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { token: memberToken } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    await db.collection('trips').doc('t1').collection('members').doc('m1').set({ name: 'M1' });
+    await db.collection('trips').doc('t1').collection('members').doc('m2').set({ name: 'M2' });
+    return { db, adminToken, memberToken };
+  }
+
+  test('overwrites excludedMembers on all listed expenses (admin)', async () => {
+    const { db, adminToken, memberToken } = await seedTrip();
+    const a = (await addExpense(db, {
+      sessionToken: memberToken, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01',
+    })).expenseId;
+    const b = (await addExpense(db, {
+      sessionToken: memberToken, tripId: 't1', category: '식비', amount: 2000, date: '2026-08-01',
+    })).expenseId;
+
+    await setExpenseExclusions(db, {
+      sessionToken: adminToken, tripId: 't1', expenseIds: [a, b], excludedMemberIds: ['m2'],
+    });
+
+    for (const id of [a, b]) {
+      const snap = await db.collection('trips').doc('t1').collection('expenses').doc(id).get();
+      expect(snap.data().excludedMembers).toEqual(['m2']);
+    }
+  });
+
+  test('clears exclusions when excludedMemberIds is empty', async () => {
+    const { db, adminToken, memberToken } = await seedTrip();
+    const a = (await addExpense(db, {
+      sessionToken: memberToken, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01', excludedMembers: ['m2'],
+    })).expenseId;
+
+    await setExpenseExclusions(db, {
+      sessionToken: adminToken, tripId: 't1', expenseIds: [a], excludedMemberIds: [],
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(a).get();
+    expect(snap.data().excludedMembers).toEqual([]);
+  });
+
+  test('rejects EXPENSE_NOT_FOUND if any id is missing', async () => {
+    const { db, adminToken } = await seedTrip();
+
+    await expect(setExpenseExclusions(db, {
+      sessionToken: adminToken, tripId: 't1', expenseIds: ['nope'], excludedMemberIds: [],
+    })).rejects.toThrow('EXPENSE_NOT_FOUND');
+  });
+
+  test('rejects INVALID_EXCLUDED_MEMBERS for an unknown member id', async () => {
+    const { db, adminToken, memberToken } = await seedTrip();
+    const a = (await addExpense(db, {
+      sessionToken: memberToken, tripId: 't1', category: '식비', amount: 1000, date: '2026-08-01',
+    })).expenseId;
+
+    await expect(setExpenseExclusions(db, {
+      sessionToken: adminToken, tripId: 't1', expenseIds: [a], excludedMemberIds: ['ghost'],
+    })).rejects.toThrow('INVALID_EXCLUDED_MEMBERS');
+  });
+
+  test('rejects a non-admin session', async () => {
+    const { db, memberToken } = await seedTrip();
+
+    await expect(setExpenseExclusions(db, {
+      sessionToken: memberToken, tripId: 't1', expenseIds: [], excludedMemberIds: [],
+    })).rejects.toThrow();
   });
 });
