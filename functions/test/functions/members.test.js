@@ -22,6 +22,21 @@ describe('members', () => {
     });
   });
 
+  test('addMember stores a provided account and defaults it to null', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    const withAccount = await addMember(db, {
+      sessionToken: token, tripId: 't1', name: '슬기', account: '우리 1111-22',
+    });
+    const a = await db.collection('trips').doc('t1').collection('members').doc(withAccount.memberId).get();
+    expect(a.data().account).toBe('우리 1111-22');
+
+    const noAccount = await addMember(db, { sessionToken: token, tripId: 't1', name: '민수' });
+    const b = await db.collection('trips').doc('t1').collection('members').doc(noAccount.memberId).get();
+    expect(b.data().account).toBeNull();
+  });
+
   test('addMember stores an explicit weight as given', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });

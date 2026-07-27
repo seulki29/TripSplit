@@ -18,7 +18,7 @@ async function addMember(db, data) {
   const ref = await membersRef.add({
     name,
     weight,
-    account: null,
+    account: data.account || null,
     settled: false,
   });
 
