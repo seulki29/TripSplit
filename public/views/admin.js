@@ -1,6 +1,7 @@
 import { callFunction, logout } from '../api.js';
 import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, renderChipGroup, escapeHtml } from '../ui.js';
+import { renderReportInto } from './report.js';
 
 const CATEGORIES = ['숙박', '식비', '장보기', '교통비'];
 let currentTab = 'setup';
@@ -28,7 +29,7 @@ function render(root, slug) {
         <button type="button" class="tab ${currentTab === 'setup' ? 'active' : ''}" data-tab="setup">여행정보</button>
         <button type="button" class="tab ${currentTab === 'members' ? 'active' : ''}" data-tab="members">구성원</button>
         <button type="button" class="tab ${currentTab === 'expenses' ? 'active' : ''}" data-tab="expenses">경비확인</button>
-        <button type="button" class="tab" data-tab="report">리포트</button>
+        <button type="button" class="tab ${currentTab === 'report' ? 'active' : ''}" data-tab="report">리포트</button>
       </div>
       <div id="admin-tab-body"></div>
     </div>`;
@@ -37,15 +38,16 @@ function render(root, slug) {
 
   root.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      if (tab.dataset.tab === 'report') { location.href = `/t/${slug}/report`; return; }
       currentTab = tab.dataset.tab;
       render(root, slug);
     });
   });
 
   const body = root.querySelector('#admin-tab-body');
+  body.innerHTML = '<p class="muted">불러오는 중...</p>';
   if (currentTab === 'setup') renderSetupTab(body, slug, myToken);
   else if (currentTab === 'members') renderMembersTab(body, slug, myToken);
+  else if (currentTab === 'report') renderReportInto(body, slug);
   else renderExpensesTab(body, slug, myToken);
 }
 

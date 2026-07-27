@@ -77,7 +77,8 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 }
 
 /* ── TABS ── */
-.tabs { display: flex; border-bottom: 2px solid var(--rule); margin-bottom: 1.5rem; overflow-x: auto; }
+.tabs { display: flex; border-bottom: 2px solid var(--rule); margin-bottom: 1.5rem; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
 .tab {
   padding: 0.7rem 1.1rem; font-size: 13px; font-family: var(--f-kr); font-weight: 500;
   color: var(--ink-3); background: none; border: none; cursor: pointer;

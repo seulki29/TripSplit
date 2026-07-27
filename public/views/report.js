@@ -9,57 +9,40 @@ const CATEGORY_COLORS = {
   교통비: '#8a3a1a',
 };
 
-function mount(root, { slug }) {
+async function renderReportInto(container, slug) {
   const session = getSession();
-  if (!session || session.tripSlug !== slug) {
-    location.href = `/t/${slug}`;
-    return;
-  }
-  render(root, slug);
-}
-
-async function render(root, slug) {
-  const session = getSession();
-  root.innerHTML = '<div class="container center" style="padding-top:4rem"><p class="muted">불러오는 중...</p></div>';
+  container.innerHTML = '<p class="muted">불러오는 중...</p>';
 
   const data = await callFunction('getReportData', { tripId: session.tripId });
   const { trip, members, expenses, settlement, currentCategoryAverages, groupCategoryAverages, tripsInComparison } = data;
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
   const confirmedExpenses = expenses.filter((e) => e.confirmed);
+
+  container.innerHTML = `
+    <p class="label">Travel Expense Report</p>
+    <h1>${escapeHtml(trip.name)}</h1>
+    <p class="muted">${escapeHtml(trip.period?.start || '')} — ${escapeHtml(trip.period?.end || '')} · ${escapeHtml(trip.location || '')} · ${escapeHtml(trip.lodging || '')}</p>
+
+    <div class="section"><h2>전체 지출 내역</h2>${renderExpenseTable(confirmedExpenses, nameById)}</div>
+    <div class="section"><h2>카테고리 분석</h2>
+      ${renderDonutChart(settlement.categoryTotals)}
+      ${tripsInComparison > 0 ? renderComparisonBars(currentCategoryAverages, groupCategoryAverages) : '<p class="muted">비교할 과거 여행이 아직 없습니다.</p>'}
+    </div>
+    <div class="section"><h2>결제자별 지출</h2>${renderPayerSummary(settlement.perMember)}</div>
+    <div class="section"><h2>최종 정산</h2>${renderSettlement(settlement.perMember)}</div>`;
+}
+
+function mount(root, { slug }) {
+  const session = getSession();
+  if (!session || session.tripSlug !== slug) { location.href = `/t/${slug}`; return; }
   const backHref = session.role === 'admin' ? `/t/${slug}/admin` : `/t/${slug}`;
-
-  root.innerHTML = `
-    <div class="container" style="padding-top:2rem">
-      <p class="center"><a href="${backHref}">← 돌아가기</a></p>
-      <p class="label">Travel Expense Report</p>
-      <h1>${escapeHtml(trip.name)}</h1>
-      <p class="muted">${escapeHtml(trip.period?.start || '')} — ${escapeHtml(trip.period?.end || '')} · ${escapeHtml(trip.location || '')} · ${escapeHtml(trip.lodging || '')}</p>
-
-      <div class="section">
-        <h2>전체 지출 내역</h2>
-        ${renderExpenseTable(confirmedExpenses, nameById)}
-      </div>
-
-      <div class="section">
-        <h2>카테고리 분석</h2>
-        ${renderDonutChart(settlement.categoryTotals)}
-        ${tripsInComparison > 0 ? renderComparisonBars(currentCategoryAverages, groupCategoryAverages) : '<p class="muted">비교할 과거 여행이 아직 없습니다.</p>'}
-      </div>
-
-      <div class="section">
-        <h2>결제자별 지출</h2>
-        ${renderPayerSummary(settlement.perMember)}
-      </div>
-
-      <div class="section">
-        <h2>최종 정산</h2>
-        ${renderSettlement(settlement.perMember)}
-      </div>
-    </div>`;
+  root.innerHTML = `<div class="container" style="padding-top:2rem"><p class="center"><a href="${backHref}">← 돌아가기</a></p><div id="report-body"></div></div>`;
+  renderReportInto(document.getElementById('report-body'), slug);
 }
 
 function renderExpenseTable(expenses, nameById) {
   return `
+    <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="text-align:left;font-size:11px;color:var(--ink-3)">
         <th style="padding:0.5rem">날짜</th><th>카테고리</th><th>내용</th><th>결제자</th><th style="text-align:right">금액</th>
@@ -74,7 +57,8 @@ function renderExpenseTable(expenses, nameById) {
             <td style="text-align:right" class="mono">${Number(e.amount).toLocaleString()}원</td>
           </tr>`).join('')}
       </tbody>
-    </table>`;
+    </table>
+    </div>`;
 }
 
 function renderDonutChart(categoryTotals) {
@@ -146,4 +130,4 @@ function renderSettlement(perMember) {
     </div>`;
 }
 
-export { mount };
+export { mount, renderReportInto };

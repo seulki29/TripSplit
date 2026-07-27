@@ -1,6 +1,7 @@
 import { callFunction, logout } from '../api.js';
 import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, renderChipGroup, escapeHtml } from '../ui.js';
+import { renderReportInto } from './report.js';
 
 const CATEGORIES = ['숙박', '식비', '장보기', '교통비'];
 
@@ -25,11 +26,16 @@ async function render(root, slug) {
         </div>
       </div>
       <div id="member-expenses-list" style="margin-top:1rem"></div>
-      <p class="center" style="margin-top:2rem"><a href="/t/${slug}/report">리포트 보기 →</a></p>
+      <p class="center" style="margin-top:2rem"><button type="button" class="btn btn-secondary" id="me-report">리포트 보기 →</button></p>
     </div>`;
 
   document.getElementById('member-add-expense').addEventListener('click', () => openExpenseModal(root, slug));
   document.getElementById('member-logout').addEventListener('click', logout);
+  document.getElementById('me-report').addEventListener('click', async () => {
+    root.innerHTML = `<div class="container" style="padding-top:2rem"><p><a href="#" id="me-back">← 경비 목록</a></p><div id="me-report-body"></div></div>`;
+    document.getElementById('me-back').addEventListener('click', (ev) => { ev.preventDefault(); render(root, slug); });
+    await renderReportInto(document.getElementById('me-report-body'), slug);
+  });
   await loadExpenses(root, slug);
 }
 
