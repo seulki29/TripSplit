@@ -1,6 +1,6 @@
 import { callFunction, logout } from '../api.js';
 import { getSession, setSession } from '../session.js';
-import { openModal, closeModal, showToast } from '../ui.js';
+import { openModal, closeModal, showToast, escapeHtml } from '../ui.js';
 
 function mount(root) {
   const session = getSession();
@@ -54,7 +54,7 @@ async function renderDashboard(root) {
   try {
     await loadTrips(root);
   } catch (err) {
-    root.querySelector('#sa-trip-list').innerHTML = `<p class="muted" style="margin-top:1rem">여행 목록을 불러오지 못했습니다: ${err.message}</p>`;
+    root.querySelector('#sa-trip-list').innerHTML = `<p class="muted" style="margin-top:1rem">여행 목록을 불러오지 못했습니다: ${escapeHtml(err.message)}</p>`;
   }
 }
 
@@ -73,10 +73,10 @@ async function loadTrips(root) {
       <tbody>
         ${trips.map((t) => `
           <tr style="border-top:1px solid var(--rule)" data-trip-id="${t.id}">
-            <td style="padding:0.6rem 0.5rem">${t.name}</td>
-            <td class="mono">${t.slug}</td>
-            <td>${t.group}</td>
-            <td>${t.status}</td>
+            <td style="padding:0.6rem 0.5rem">${escapeHtml(t.name)}</td>
+            <td class="mono">${escapeHtml(t.slug)}</td>
+            <td>${escapeHtml(t.group)}</td>
+            <td>${escapeHtml(t.status)}</td>
             <td><button type="button" class="btn btn-secondary sa-reissue" data-trip-id="${t.id}">PIN 재발급</button></td>
           </tr>`).join('')}
       </tbody>

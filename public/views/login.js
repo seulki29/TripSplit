@@ -1,5 +1,6 @@
 import { callFunction } from '../api.js';
 import { setSession } from '../session.js';
+import { escapeHtml } from '../ui.js';
 
 let currentTab = 'admin';
 let renderToken = 0;
@@ -31,12 +32,6 @@ function render(root, slug) {
 
   if (currentTab === 'admin') renderAdminForm(root, slug, myToken);
   else renderMemberForm(root, slug, myToken);
-}
-
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[c]));
 }
 
 function renderAdminForm(root, slug, myToken) {

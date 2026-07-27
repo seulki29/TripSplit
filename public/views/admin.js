@@ -55,8 +55,8 @@ async function renderSetupTab(body, slug, myToken) {
   if (myToken !== renderToken) return;
 
   body.innerHTML = `
-    <div class="field"><label class="label">기간 시작</label><input type="date" class="input" id="setup-start" value="${trip.period?.start || ''}"></div>
-    <div class="field"><label class="label">기간 종료</label><input type="date" class="input" id="setup-end" value="${trip.period?.end || ''}"></div>
+    <div class="field"><label class="label">기간 시작</label><input type="date" class="input" id="setup-start" value="${escapeHtml(trip.period?.start || '')}"></div>
+    <div class="field"><label class="label">기간 종료</label><input type="date" class="input" id="setup-end" value="${escapeHtml(trip.period?.end || '')}"></div>
     <div class="field"><label class="label">장소</label><input class="input" id="setup-location" value="${escapeHtml(trip.location || '')}"></div>
     <div class="field"><label class="label">숙박지</label><input class="input" id="setup-lodging" value="${escapeHtml(trip.lodging || '')}"></div>
     <button type="button" class="btn btn-primary" id="setup-save">저장</button>`;
@@ -96,7 +96,7 @@ function renderMembersList(body, slug) {
     <div class="card" style="margin-bottom:0.6rem;display:flex;justify-content:space-between;align-items:center">
       <div>
         <strong>${escapeHtml(m.name)}</strong>
-        <span class="muted" style="font-size:12px;margin-left:0.5rem">가중치 ${m.weight}${m.excludedCategories.length ? ' · 제외: ' + m.excludedCategories.join(', ') : ''}</span>
+        <span class="muted" style="font-size:12px;margin-left:0.5rem">가중치 ${m.weight}${m.excludedCategories.length ? ' · 제외: ' + escapeHtml(m.excludedCategories.join(', ')) : ''}</span>
       </div>
       <button type="button" class="btn btn-secondary member-edit" data-id="${m.id}">수정</button>
     </div>`).join('');

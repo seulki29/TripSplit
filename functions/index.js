@@ -2,6 +2,9 @@ const { onCall } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 
+// NOTE: replace 'demo-sfayw.appspot.com' with the real deployed storage bucket in Plan 3.
+// Production signed URLs additionally require the function service account to have the
+// Service Account Token Creator role (iam.serviceAccounts.signBlob).
 admin.initializeApp({ storageBucket: 'demo-sfayw.appspot.com' });
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
