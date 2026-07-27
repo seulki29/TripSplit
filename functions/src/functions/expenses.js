@@ -9,7 +9,7 @@ async function listExpenses(db, data) {
 
 async function addExpense(db, data) {
   const {
-    sessionToken, tripId, date, category, amount, merchant, detail, photoUrl,
+    sessionToken, tripId, date, category, amount, merchant, detail, photoPath,
   } = data;
   const session = await requireSession(db, sessionToken, ['admin', 'member'], tripId);
 
@@ -34,7 +34,7 @@ async function addExpense(db, data) {
     detail: detail || '',
     enteredBy,
     recordedBy: session.role,
-    photoUrl: photoUrl || null,
+    photoPath: photoPath || null,
     confirmed: false,
     confirmedAt: null,
     createdAt: Date.now(),
@@ -71,14 +71,14 @@ async function updateExpense(db, data) {
   }
   if ('merchant' in patch) update.merchant = patch.merchant;
   if ('detail' in patch) update.detail = patch.detail;
-  if ('photoUrl' in patch) update.photoUrl = patch.photoUrl;
+  if ('photoPath' in patch) update.photoPath = patch.photoPath;
 
   update.updatedAt = Date.now();
   await ref.update(update);
   return { ok: true };
 }
 
-async function deleteExpense(db, data) {
+async function deleteExpense(db, bucket, data) {
   const { sessionToken, tripId, expenseId } = data;
   const session = await requireSession(db, sessionToken, ['admin', 'member'], tripId);
 
@@ -90,6 +90,11 @@ async function deleteExpense(db, data) {
   if (session.role === 'member') {
     if (expense.enteredBy !== session.memberId) throw new Error('FORBIDDEN');
     if (expense.confirmed) throw new Error('EXPENSE_LOCKED');
+  }
+
+  // Best-effort: a storage failure must never block the expense delete.
+  if (expense.photoPath) {
+    await bucket.file(expense.photoPath).delete().catch(() => {});
   }
 
   await ref.delete();
