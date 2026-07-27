@@ -34,6 +34,10 @@ describe('uploadReceiptImage', () => {
 });
 
 describe('getReceiptReadUrl', () => {
+  beforeEach(() => {
+    delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+  });
+
   test('mints a signed URL for the given path with a 15-minute expiry', async () => {
     const bucket = makeFakeBucket();
     const before = Date.now();
@@ -43,5 +47,16 @@ describe('getReceiptReadUrl', () => {
     const expires = Number(new URL(url).searchParams.get('expires'));
     expect(expires).toBeGreaterThanOrEqual(before + READ_URL_TTL_MS);
     expect(expires).toBeLessThanOrEqual(Date.now() + READ_URL_TTL_MS);
+  });
+
+  test('serves the emulator download endpoint when FIREBASE_STORAGE_EMULATOR_HOST is set', async () => {
+    const bucket = makeFakeBucket();
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+    try {
+      const url = await getReceiptReadUrl(bucket, 'receipts/trip1/abc.jpg');
+      expect(url).toBe('http://127.0.0.1:9199/download/storage/v1/b/fake-bucket/o/receipts%2Ftrip1%2Fabc.jpg?alt=media');
+    } finally {
+      delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    }
   });
 });

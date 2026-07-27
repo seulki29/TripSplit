@@ -21,6 +21,14 @@ async function uploadReceiptImage(bucket, tripId, base64, mimeType) {
 }
 
 async function getReceiptReadUrl(bucket, path) {
+  // The Storage emulator has no signing credentials, so getSignedUrl hangs
+  // trying to reach a metadata server. Serve the emulator's JSON-API
+  // download endpoint instead; production keeps real signed URLs.
+  const emulatorHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST || process.env.STORAGE_EMULATOR_HOST;
+  if (emulatorHost) {
+    const host = emulatorHost.replace(/^https?:\/\//, '');
+    return `http://${host}/download/storage/v1/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+  }
   const [url] = await bucket.file(path).getSignedUrl({ action: 'read', expires: Date.now() + READ_URL_TTL_MS });
   return url;
 }

@@ -2,6 +2,7 @@ function makeFakeBucket() {
   const saved = [];
   const deleted = [];
   const bucket = {
+    name: 'fake-bucket',
     saved,
     deleted,
     failNextDelete: false,
