@@ -7,14 +7,9 @@ async function addMember(db, data) {
   if (!name || !name.trim()) throw new Error('NAME_REQUIRED');
 
   // Same validation as updateMember: a member created with a non-numeric weight
-  // turns every settlement figure into NaN, and a non-array excludedCategories
-  // (any truthy value survives `|| []`) crashes computeSettlement's .includes(),
-  // breaking the whole trip's report.
+  // turns every settlement figure into NaN.
   const weight = data.weight != null ? data.weight : 1;
   if (typeof weight !== 'number' || weight < 0) throw new Error('INVALID_WEIGHT');
-
-  const excludedCategories = data.excludedCategories || [];
-  if (!Array.isArray(excludedCategories)) throw new Error('INVALID_EXCLUDED_CATEGORIES');
 
   const membersRef = db.collection('trips').doc(tripId).collection('members');
   const existing = await membersRef.where('name', '==', name).get();
@@ -23,8 +18,8 @@ async function addMember(db, data) {
   const ref = await membersRef.add({
     name,
     weight,
-    excludedCategories,
     account: null,
+    settled: false,
   });
 
   return { memberId: ref.id };
@@ -55,10 +50,6 @@ async function updateMember(db, data) {
     if (typeof patch.weight !== 'number' || patch.weight < 0) throw new Error('INVALID_WEIGHT');
     update.weight = patch.weight;
   }
-  if (patch.excludedCategories !== undefined) {
-    if (!Array.isArray(patch.excludedCategories)) throw new Error('INVALID_EXCLUDED_CATEGORIES');
-    update.excludedCategories = patch.excludedCategories;
-  }
   if (patch.account !== undefined) update.account = patch.account;
 
   // Firestore rejects an empty update map ("At least one field must be
@@ -76,4 +67,18 @@ async function listMembers(db, data) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-module.exports = { addMember, updateMember, listMembers };
+async function setMemberSettled(db, data) {
+  const { tripId, memberId, settled } = data;
+  await requireSession(db, data.sessionToken, ['admin'], tripId);
+
+  const memberRef = db.collection('trips').doc(tripId).collection('members').doc(memberId);
+  const snap = await memberRef.get();
+  if (!snap.exists) throw new Error('MEMBER_NOT_FOUND');
+
+  await memberRef.update({ settled: !!settled });
+  return { ok: true };
+}
+
+module.exports = {
+  addMember, updateMember, listMembers, setMemberSettled,
+};

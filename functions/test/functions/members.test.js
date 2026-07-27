@@ -1,6 +1,8 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { createSession } = require('../../src/lib/sessions');
-const { addMember, updateMember, listMembers } = require('../../src/functions/members');
+const {
+  addMember, updateMember, listMembers, setMemberSettled,
+} = require('../../src/functions/members');
 
 describe('members', () => {
   test('addMember requires an admin session for the trip', async () => {
@@ -9,26 +11,28 @@ describe('members', () => {
     await expect(addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' })).rejects.toThrow('FORBIDDEN');
   });
 
-  test('addMember creates a member with default weight 1 and no exclusions', async () => {
+  test('addMember creates a member with default weight 1 and unsettled', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
 
     const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
     const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
-    expect(snap.data()).toEqual({ name: '슬기', weight: 1, excludedCategories: [], account: null });
+    expect(snap.data()).toEqual({
+      name: '슬기', weight: 1, account: null, settled: false,
+    });
   });
 
-  test('addMember stores an explicit weight and exclusion list as given', async () => {
+  test('addMember stores an explicit weight as given', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
 
     const { memberId } = await addMember(db, {
-      sessionToken: token, tripId: 't1', name: '슬기', weight: 0.5, excludedCategories: ['식비'],
+      sessionToken: token, tripId: 't1', name: '슬기', weight: 0.5,
     });
 
     const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
     expect(snap.data()).toEqual({
-      name: '슬기', weight: 0.5, excludedCategories: ['식비'], account: null,
+      name: '슬기', weight: 0.5, account: null, settled: false,
     });
   });
 
@@ -54,24 +58,6 @@ describe('members', () => {
     })).rejects.toThrow('INVALID_WEIGHT');
   });
 
-  test('addMember rejects excludedCategories that is not an array', async () => {
-    const db = new FakeFirestore();
-    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
-
-    // A truthy non-array sails through `|| []` and later crashes .includes(),
-    // breaking getReportData for the entire trip.
-    await expect(addMember(db, {
-      sessionToken: token, tripId: 't1', name: '슬기', excludedCategories: 5,
-    })).rejects.toThrow('INVALID_EXCLUDED_CATEGORIES');
-
-    await expect(addMember(db, {
-      sessionToken: token, tripId: 't1', name: '슬기', excludedCategories: '식비',
-    })).rejects.toThrow('INVALID_EXCLUDED_CATEGORIES');
-
-    const members = await db.collection('trips').doc('t1').collection('members').get();
-    expect(members.docs).toHaveLength(0);
-  });
-
   test('addMember rejects a duplicate name within the same trip', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
@@ -89,17 +75,17 @@ describe('members', () => {
     await expect(addMember(db, { sessionToken: t2, tripId: 't2', name: '슬기' })).resolves.toBeDefined();
   });
 
-  test('updateMember can set a custom weight and excluded categories', async () => {
+  test('updateMember can set a custom weight', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
     const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '충엽' });
 
     await updateMember(db, {
-      sessionToken: token, tripId: 't1', memberId, patch: { weight: 1, excludedCategories: ['식비'] },
+      sessionToken: token, tripId: 't1', memberId, patch: { weight: 1 },
     });
 
     const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
-    expect(snap.data().excludedCategories).toEqual(['식비']);
+    expect(snap.data().weight).toEqual(1);
   });
 
   test('updateMember rejects renaming a member to a name already used by someone else', async () => {
@@ -148,7 +134,7 @@ describe('members', () => {
 
     const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
     expect(snap.data()).toEqual({
-      name: '슬기', weight: 2, excludedCategories: [], account: null,
+      name: '슬기', weight: 2, account: null, settled: false,
     });
     expect(snap.data().role).toBeUndefined();
     expect(snap.data().isAdmin).toBeUndefined();
@@ -187,16 +173,6 @@ describe('members', () => {
     expect(snap.data().weight).toBe(0);
   });
 
-  test('updateMember rejects excludedCategories that is not an array', async () => {
-    const db = new FakeFirestore();
-    const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
-    const { memberId } = await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기' });
-
-    await expect(updateMember(db, {
-      sessionToken: token, tripId: 't1', memberId, patch: { excludedCategories: '식비' },
-    })).rejects.toThrow('INVALID_EXCLUDED_CATEGORIES');
-  });
-
   test('updateMember can set the account details', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
@@ -230,7 +206,7 @@ describe('members', () => {
 
     const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
     expect(snap.data()).toEqual({
-      name: '슬기', weight: 1, excludedCategories: [], account: null,
+      name: '슬기', weight: 1, account: null, settled: false,
     });
   });
 
@@ -245,21 +221,21 @@ describe('members', () => {
 
     const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
     expect(snap.data()).toEqual({
-      name: '슬기', weight: 1, excludedCategories: [], account: null,
+      name: '슬기', weight: 1, account: null, settled: false,
     });
   });
 
   test('listMembers returns full member records for an admin session', async () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 't1' });
-    await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기', weight: 1.5, excludedCategories: ['식비'] });
+    await addMember(db, { sessionToken: token, tripId: 't1', name: '슬기', weight: 1.5 });
 
     const result = await listMembers(db, { sessionToken: token, tripId: 't1' });
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('슬기');
     expect(result[0].weight).toBe(1.5);
-    expect(result[0].excludedCategories).toEqual(['식비']);
+    expect(result[0].settled).toBe(false);
     expect(result[0].id).toBeDefined();
   });
 
@@ -273,5 +249,45 @@ describe('members', () => {
     const db = new FakeFirestore();
     const { token } = await createSession(db, { role: 'admin', tripId: 'other-trip' });
     await expect(listMembers(db, { sessionToken: token, tripId: 't1' })).rejects.toThrow('FORBIDDEN');
+  });
+});
+
+describe('setMemberSettled', () => {
+  test('marks a member settled and unsettled (admin)', async () => {
+    const db = new FakeFirestore();
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: adminToken, tripId: 't1', name: '슬기' });
+
+    await setMemberSettled(db, {
+      sessionToken: adminToken, tripId: 't1', memberId, settled: true,
+    });
+    let snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data().settled).toBe(true);
+
+    await setMemberSettled(db, {
+      sessionToken: adminToken, tripId: 't1', memberId, settled: false,
+    });
+    snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data().settled).toBe(false);
+  });
+
+  test('rejects MEMBER_NOT_FOUND', async () => {
+    const db = new FakeFirestore();
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId: 't1' });
+
+    await expect(setMemberSettled(db, {
+      sessionToken: adminToken, tripId: 't1', memberId: 'nope', settled: true,
+    })).rejects.toThrow('MEMBER_NOT_FOUND');
+  });
+
+  test('rejects a non-admin session', async () => {
+    const db = new FakeFirestore();
+    const { token: adminToken } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: adminToken, tripId: 't1', name: '슬기' });
+    const { token: memberToken } = await createSession(db, { role: 'member', tripId: 't1', memberId });
+
+    await expect(setMemberSettled(db, {
+      sessionToken: memberToken, tripId: 't1', memberId, settled: true,
+    })).rejects.toThrow();
   });
 });
