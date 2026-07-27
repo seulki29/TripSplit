@@ -225,7 +225,7 @@ function openAdminExpenseModal(body, slug, members) {
   let mimeType = null;
 
   openModal('경비 입력', `
-    <div class="field"><label class="label">사진</label><input type="file" accept="image/*" capture="environment" id="ae-photo"></div>
+    <div class="field"><label class="label">사진</label><input type="file" accept="image/*" id="ae-photo"></div>
     <div id="ae-photo-preview"></div>
     <div class="field"><label class="label">입력 귀속 대상</label>
       <select class="input" id="ae-member">${members.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}</select>

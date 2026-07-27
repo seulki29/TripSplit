@@ -76,7 +76,7 @@ function openExpenseModal(root, slug) {
   let photoPath = null;
 
   openModal('경비 입력', `
-    <div class="field"><label class="label">사진</label><input type="file" accept="image/*" capture="environment" id="me-photo"></div>
+    <div class="field"><label class="label">사진</label><input type="file" accept="image/*" id="me-photo"></div>
     <div id="me-photo-preview"></div>
     <div class="field"><label class="label">카테고리</label><div id="me-category"></div></div>
     <div class="field"><label class="label">날짜</label><input type="date" class="input" id="me-date"></div>
