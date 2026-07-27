@@ -57,8 +57,8 @@ async function renderSetupTab(body, slug, myToken) {
   body.innerHTML = `
     <div class="field"><label class="label">기간 시작</label><input type="date" class="input" id="setup-start" value="${trip.period?.start || ''}"></div>
     <div class="field"><label class="label">기간 종료</label><input type="date" class="input" id="setup-end" value="${trip.period?.end || ''}"></div>
-    <div class="field"><label class="label">장소</label><input class="input" id="setup-location" value="${trip.location || ''}"></div>
-    <div class="field"><label class="label">숙박지</label><input class="input" id="setup-lodging" value="${trip.lodging || ''}"></div>
+    <div class="field"><label class="label">장소</label><input class="input" id="setup-location" value="${escapeHtml(trip.location || '')}"></div>
+    <div class="field"><label class="label">숙박지</label><input class="input" id="setup-lodging" value="${escapeHtml(trip.lodging || '')}"></div>
     <button type="button" class="btn btn-primary" id="setup-save">저장</button>`;
 
   document.getElementById('setup-save').addEventListener('click', async () => {
@@ -174,7 +174,7 @@ async function renderExpensesTab(body, slug, myToken) {
         <div>
           <span class="tag">${e.category}</span>
           <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
-          <span class="muted" style="font-size:12px;margin-left:0.5rem">${e.date} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
+          <span class="muted" style="font-size:12px;margin-left:0.5rem">${escapeHtml(e.date)} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
           ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">컴펌됨</span>' : ''}
         </div>
         <div>
