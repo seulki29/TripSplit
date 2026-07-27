@@ -14,10 +14,10 @@ function mount(root) {
 function renderLogin(root) {
   root.innerHTML = `
     <div class="container" style="max-width:360px;padding-top:4rem">
-      <h2>슈퍼어드민</h2>
+      <h2>Superadmin</h2>
       <div class="field">
-        <label class="label">비밀번호</label>
-        <input type="password" class="input" id="sa-password" autocomplete="current-password">
+        <label class="label">Password</label>
+        <input type="password" class="input" id="sa-password" autocomplete="current-password" lang="en" autocapitalize="off" autocorrect="off" spellcheck="false" style="ime-mode:disabled">
       </div>
       <button type="button" class="btn btn-primary btn-block" id="sa-login-btn">로그인</button>
       <p class="muted" id="sa-error" style="margin-top:0.75rem;font-size:13px"></p>
