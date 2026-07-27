@@ -31,6 +31,16 @@ function wrap(handler) {
   };
 }
 
+function wrapWithBucket(handler) {
+  return async (request) => {
+    try {
+      return await handler(db, bucket, request.data);
+    } catch (err) {
+      throw toHttpsError(err);
+    }
+  };
+}
+
 exports.verifySuperadminPassword = onCall({ secrets: [superadminPasswordHash] }, async (request) => {
   try {
     return await superadmin.verifySuperadminPassword(db, superadminPasswordHash.value(), request.data);
@@ -69,5 +79,7 @@ exports.classifyReceipt = onCall({ secrets: [geminiApiKey] }, async (request) =>
     throw toHttpsError(err);
   }
 });
+
+exports.getReceiptUrl = onCall(wrapWithBucket(receipts.getReceiptUrl));
 
 exports.getReportData = onCall(wrap(report.getReportData));
