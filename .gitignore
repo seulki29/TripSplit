@@ -19,3 +19,9 @@ database-debug.log
 # OS/editor cruft
 .DS_Store
 Thumbs.db
+.vercel
+.env*
+
+# Transient superadmin password-hash files from scripts/hash-password.js
+functions/newhash.txt
+functions/checkhash.txt
