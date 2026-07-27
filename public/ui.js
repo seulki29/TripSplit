@@ -56,4 +56,10 @@ function renderChipGroup(container, options, selected, onSelect) {
   });
 }
 
-export { openModal, closeModal, showToast, renderChipGroup };
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+export { openModal, closeModal, showToast, renderChipGroup, escapeHtml };

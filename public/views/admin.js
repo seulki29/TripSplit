@@ -1,10 +1,11 @@
 import { callFunction, logout } from '../api.js';
 import { getSession } from '../session.js';
-import { openModal, closeModal, showToast, renderChipGroup } from '../ui.js';
+import { openModal, closeModal, showToast, renderChipGroup, escapeHtml } from '../ui.js';
 
 const CATEGORIES = ['숙박', '식비', '장보기', '교통비'];
 let currentTab = 'setup';
 let membersCache = [];
+let renderToken = 0;
 
 function mount(root, { slug }) {
   const session = getSession();
@@ -16,6 +17,7 @@ function mount(root, { slug }) {
 }
 
 function render(root, slug) {
+  const myToken = ++renderToken;
   root.innerHTML = `
     <div class="container" style="padding-top:2rem">
       <div style="display:flex;justify-content:space-between;align-items:center">
@@ -42,14 +44,16 @@ function render(root, slug) {
   });
 
   const body = root.querySelector('#admin-tab-body');
-  if (currentTab === 'setup') renderSetupTab(body, slug);
-  else if (currentTab === 'members') renderMembersTab(body, slug);
-  else renderExpensesTab(body, slug);
+  if (currentTab === 'setup') renderSetupTab(body, slug, myToken);
+  else if (currentTab === 'members') renderMembersTab(body, slug, myToken);
+  else renderExpensesTab(body, slug, myToken);
 }
 
-async function renderSetupTab(body, slug) {
+async function renderSetupTab(body, slug, myToken) {
   const session = getSession();
   const trip = await callFunction('getTripSetup', { tripId: session.tripId });
+  if (myToken !== renderToken) return;
+
   body.innerHTML = `
     <div class="field"><label class="label">기간 시작</label><input type="date" class="input" id="setup-start" value="${trip.period?.start || ''}"></div>
     <div class="field"><label class="label">기간 종료</label><input type="date" class="input" id="setup-end" value="${trip.period?.end || ''}"></div>
@@ -74,9 +78,10 @@ async function renderSetupTab(body, slug) {
   });
 }
 
-async function renderMembersTab(body, slug) {
+async function renderMembersTab(body, slug, myToken) {
   const session = getSession();
   membersCache = await callFunction('listMembers', { tripId: session.tripId });
+  if (myToken !== renderToken) return;
 
   body.innerHTML = `
     <button type="button" class="btn btn-primary" id="members-add" style="margin-bottom:1rem">구성원 추가</button>
@@ -90,7 +95,7 @@ function renderMembersList(body, slug) {
   body.querySelector('#members-list').innerHTML = membersCache.map((m) => `
     <div class="card" style="margin-bottom:0.6rem;display:flex;justify-content:space-between;align-items:center">
       <div>
-        <strong>${m.name}</strong>
+        <strong>${escapeHtml(m.name)}</strong>
         <span class="muted" style="font-size:12px;margin-left:0.5rem">가중치 ${m.weight}${m.excludedCategories.length ? ' · 제외: ' + m.excludedCategories.join(', ') : ''}</span>
       </div>
       <button type="button" class="btn btn-secondary member-edit" data-id="${m.id}">수정</button>
@@ -104,7 +109,7 @@ function renderMembersList(body, slug) {
 function openMemberModal(body, slug, member) {
   const isEdit = !!member;
   openModal(isEdit ? '구성원 수정' : '구성원 추가', `
-    <div class="field"><label class="label">이름</label><input class="input" id="mm-name" value="${member?.name || ''}"></div>
+    <div class="field"><label class="label">이름</label><input class="input" id="mm-name" value="${escapeHtml(member?.name || '')}"></div>
     <div class="field"><label class="label">정산 가중치</label><input type="number" step="0.1" class="input" id="mm-weight" value="${member?.weight ?? 1}"></div>
     <div class="field">
       <label class="label">제외 카테고리</label>
@@ -137,20 +142,26 @@ function openMemberModal(body, slug, member) {
         await callFunction('addMember', { tripId: session.tripId, name, weight, excludedCategories: [...excluded] });
       }
       closeModal();
-      membersCache = await callFunction('listMembers', { tripId: session.tripId });
-      renderMembersList(body, slug);
+      try {
+        membersCache = await callFunction('listMembers', { tripId: session.tripId });
+        renderMembersList(body, slug);
+      } catch (err) {
+        showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
+      }
     } catch (err) {
       document.getElementById('mm-error').textContent = err.message;
     }
   });
 }
 
-async function renderExpensesTab(body, slug) {
+async function renderExpensesTab(body, slug, myToken) {
   const session = getSession();
   const [expenses, members] = await Promise.all([
     callFunction('listExpenses', { tripId: session.tripId }),
     callFunction('listMembersForLogin', { slug }),
   ]);
+  if (myToken !== renderToken) return;
+
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
 
   body.innerHTML = `
@@ -163,7 +174,7 @@ async function renderExpensesTab(body, slug) {
         <div>
           <span class="tag">${e.category}</span>
           <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
-          <span class="muted" style="font-size:12px;margin-left:0.5rem">${e.date} · ${nameById[e.enteredBy] || '?'}</span>
+          <span class="muted" style="font-size:12px;margin-left:0.5rem">${e.date} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
           ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">컴펌됨</span>' : ''}
         </div>
         <div>
@@ -171,19 +182,27 @@ async function renderExpensesTab(body, slug) {
           <button type="button" class="btn btn-danger expense-delete" data-id="${e.id}">삭제</button>
         </div>
       </div>
-      <p class="muted" style="font-size:13px;margin-top:0.4rem">${e.merchant || ''} ${e.detail || ''}</p>
+      <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}</p>
     </div>`).join('');
 
   body.querySelectorAll('.expense-confirm').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await callFunction('confirmExpense', { tripId: session.tripId, expenseId: btn.dataset.id, confirmed: btn.dataset.confirmed !== 'true' });
-      renderExpensesTab(body, slug);
+      try {
+        await callFunction('confirmExpense', { tripId: session.tripId, expenseId: btn.dataset.id, confirmed: btn.dataset.confirmed !== 'true' });
+        await renderExpensesTab(body, slug, myToken);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     });
   });
   body.querySelectorAll('.expense-delete').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await callFunction('deleteExpense', { tripId: session.tripId, expenseId: btn.dataset.id });
-      renderExpensesTab(body, slug);
+      try {
+        await callFunction('deleteExpense', { tripId: session.tripId, expenseId: btn.dataset.id });
+        await renderExpensesTab(body, slug, myToken);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
     });
   });
   document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members));
@@ -198,7 +217,7 @@ function openAdminExpenseModal(body, slug, members) {
     <div class="field"><label class="label">사진</label><input type="file" accept="image/*" capture="environment" id="ae-photo"></div>
     <div id="ae-photo-preview"></div>
     <div class="field"><label class="label">입력 귀속 대상</label>
-      <select class="input" id="ae-member">${members.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select>
+      <select class="input" id="ae-member">${members.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}</select>
     </div>
     <div class="field"><label class="label">카테고리</label><div id="ae-category"></div></div>
     <div class="field"><label class="label">날짜</label><input type="date" class="input" id="ae-date"></div>
@@ -252,7 +271,11 @@ function openAdminExpenseModal(body, slug, members) {
         photoUrl: document.getElementById('ae-photo').dataset.photoUrl || null,
       });
       closeModal();
-      renderExpensesTab(body, slug);
+      try {
+        await renderExpensesTab(body, slug, renderToken);
+      } catch (err) {
+        showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
+      }
     } catch (err) {
       document.getElementById('ae-error').textContent = err.message;
     }

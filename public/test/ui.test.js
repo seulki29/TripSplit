@@ -7,7 +7,7 @@ globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 
-const { openModal, closeModal, showToast, renderChipGroup } = await import('../ui.js');
+const { openModal, closeModal, showToast, renderChipGroup, escapeHtml } = await import('../ui.js');
 
 describe('ui.js', () => {
   beforeEach(() => {
@@ -75,5 +75,10 @@ describe('ui.js', () => {
 
   test('closeModal does nothing and does not throw when no modal has ever been opened', () => {
     assert.doesNotThrow(() => closeModal());
+  });
+
+  test('escapeHtml neutralizes HTML-significant characters', () => {
+    assert.equal(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
+    assert.equal(escapeHtml(`"quoted" & 'single'`), '&quot;quoted&quot; &amp; &#39;single&#39;');
   });
 });
