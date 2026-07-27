@@ -33,7 +33,7 @@ async function render(root, slug) {
       <p class="center"><a href="${backHref}">← 돌아가기</a></p>
       <p class="label">Travel Expense Report</p>
       <h1>${escapeHtml(trip.name)}</h1>
-      <p class="muted">${trip.period?.start || ''} — ${trip.period?.end || ''} · ${escapeHtml(trip.location || '')} · ${escapeHtml(trip.lodging || '')}</p>
+      <p class="muted">${escapeHtml(trip.period?.start || '')} — ${escapeHtml(trip.period?.end || '')} · ${escapeHtml(trip.location || '')} · ${escapeHtml(trip.lodging || '')}</p>
 
       <div class="section">
         <h2>전체 지출 내역</h2>
