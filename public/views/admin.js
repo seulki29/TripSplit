@@ -179,6 +179,7 @@ async function renderExpensesTab(body, slug, myToken) {
         </div>
         <div>
           <button type="button" class="btn btn-secondary expense-confirm" data-id="${e.id}" data-confirmed="${e.confirmed}">${e.confirmed ? '컴펌 해제' : '컴펌'}</button>
+          ${e.photoPath ? `<button type="button" class="btn btn-secondary expense-receipt" data-id="${e.id}">영수증</button>` : ''}
           <button type="button" class="btn btn-danger expense-delete" data-id="${e.id}">삭제</button>
         </div>
       </div>
@@ -200,6 +201,16 @@ async function renderExpensesTab(body, slug, myToken) {
       try {
         await callFunction('deleteExpense', { tripId: session.tripId, expenseId: btn.dataset.id });
         await renderExpensesTab(body, slug, myToken);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  });
+  body.querySelectorAll('.expense-receipt').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const { url } = await callFunction('getReceiptUrl', { tripId: session.tripId, expenseId: btn.dataset.id });
+        openModal('영수증', `<img src="${escapeHtml(url)}" style="width:100%;border-radius:4px" alt="영수증 사진">`);
       } catch (err) {
         showToast(err.message, 'error');
       }
@@ -246,14 +257,18 @@ function openAdminExpenseModal(body, slug, members) {
     try {
       const session = getSession();
       const classification = await callFunction('classifyReceipt', { tripId: session.tripId, photoBase64, mimeType });
-      if (classification.category) { category = classification.category; rerenderCategoryChips(); }
-      if (classification.date) document.getElementById('ae-date').value = classification.date;
-      if (classification.amount) document.getElementById('ae-amount').value = classification.amount;
-      if (classification.merchant) document.getElementById('ae-merchant').value = classification.merchant;
-      if (classification.detail) document.getElementById('ae-detail').value = classification.detail;
-      document.getElementById('ae-photo').dataset.photoUrl = classification.photoUrl;
+      document.getElementById('ae-photo').dataset.photoPath = classification.photoPath;
+      if (classification.classified === false) {
+        showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
+      } else {
+        if (classification.category) { category = classification.category; rerenderCategoryChips(); }
+        if (classification.date) document.getElementById('ae-date').value = classification.date;
+        if (classification.amount) document.getElementById('ae-amount').value = classification.amount;
+        if (classification.merchant) document.getElementById('ae-merchant').value = classification.merchant;
+        if (classification.detail) document.getElementById('ae-detail').value = classification.detail;
+      }
     } catch (err) {
-      showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
+      showToast('사진 업로드 실패 — 사진 없이 저장됩니다', 'error');
     }
   });
 
@@ -268,7 +283,7 @@ function openAdminExpenseModal(body, slug, members) {
         amount: Number(document.getElementById('ae-amount').value),
         merchant: document.getElementById('ae-merchant').value,
         detail: document.getElementById('ae-detail').value,
-        photoUrl: document.getElementById('ae-photo').dataset.photoUrl || null,
+        photoPath: document.getElementById('ae-photo').dataset.photoPath || null,
       });
       closeModal();
       try {

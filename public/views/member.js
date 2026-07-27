@@ -73,7 +73,7 @@ async function loadExpenses(root, slug) {
 
 function openExpenseModal(root, slug) {
   let category = CATEGORIES[1];
-  let photoUrl = null;
+  let photoPath = null;
 
   openModal('경비 입력', `
     <div class="field"><label class="label">사진</label><input type="file" accept="image/*" capture="environment" id="me-photo"></div>
@@ -105,14 +105,18 @@ function openExpenseModal(root, slug) {
     try {
       const session = getSession();
       const classification = await callFunction('classifyReceipt', { tripId: session.tripId, photoBase64, mimeType });
-      photoUrl = classification.photoUrl;
-      if (classification.category) { category = classification.category; rerenderCategoryChips(); }
-      if (classification.date) document.getElementById('me-date').value = classification.date;
-      if (classification.amount) document.getElementById('me-amount').value = classification.amount;
-      if (classification.merchant) document.getElementById('me-merchant').value = classification.merchant;
-      if (classification.detail) document.getElementById('me-detail').value = classification.detail;
+      photoPath = classification.photoPath;
+      if (classification.classified === false) {
+        showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
+      } else {
+        if (classification.category) { category = classification.category; rerenderCategoryChips(); }
+        if (classification.date) document.getElementById('me-date').value = classification.date;
+        if (classification.amount) document.getElementById('me-amount').value = classification.amount;
+        if (classification.merchant) document.getElementById('me-merchant').value = classification.merchant;
+        if (classification.detail) document.getElementById('me-detail').value = classification.detail;
+      }
     } catch (err) {
-      showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
+      showToast('사진 업로드 실패 — 사진 없이 저장됩니다', 'error');
     }
   });
 
@@ -126,7 +130,7 @@ function openExpenseModal(root, slug) {
         amount: Number(document.getElementById('me-amount').value),
         merchant: document.getElementById('me-merchant').value,
         detail: document.getElementById('me-detail').value,
-        photoUrl,
+        photoPath,
       });
       closeModal();
       await loadExpenses(document.getElementById('app'), slug);
