@@ -36,6 +36,7 @@ describe('uploadReceiptImage', () => {
 describe('getReceiptReadUrl', () => {
   beforeEach(() => {
     delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    delete process.env.STORAGE_EMULATOR_HOST;
   });
 
   test('mints a signed URL for the given path with a 15-minute expiry', async () => {
@@ -57,6 +58,7 @@ describe('getReceiptReadUrl', () => {
       expect(url).toBe('http://127.0.0.1:9199/download/storage/v1/b/fake-bucket/o/receipts%2Ftrip1%2Fabc.jpg?alt=media');
     } finally {
       delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+      delete process.env.STORAGE_EMULATOR_HOST;
     }
   });
 });

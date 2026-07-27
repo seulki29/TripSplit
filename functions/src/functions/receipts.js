@@ -26,6 +26,7 @@ async function classifyReceipt(db, bucket, apiKey, data) {
     const classification = await classifyReceiptImage(photoBase64, mimeType, apiKey);
     return { photoPath, classified: true, ...classification };
   } catch (err) {
+    console.warn('classifyReceipt: classification failed', err);
     return { photoPath, classified: false };
   }
 }

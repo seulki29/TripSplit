@@ -1,6 +1,22 @@
 const { requireSession } = require('../lib/sessions');
 const { CATEGORIES } = require('../lib/categories');
 
+const PHOTO_PATH_SUFFIX_RE = /^[0-9a-f]{32}\.(jpg|png)$/;
+
+/**
+ * A photoPath is only ever trustworthy if it was minted by our own upload
+ * (see lib/storage.js#uploadReceiptImage). Clients can supply photoPath
+ * directly (e.g. after classifyReceipt), so re-derive the expected shape
+ * here rather than trusting it: it must live under this trip's receipts
+ * namespace and end in a random 32-hex-char name with an allowed extension.
+ */
+function isValidPhotoPath(tripId, photoPath) {
+  if (typeof photoPath !== 'string') return false;
+  const prefix = `receipts/${tripId}/`;
+  if (!photoPath.startsWith(prefix)) return false;
+  return PHOTO_PATH_SUFFIX_RE.test(photoPath.slice(prefix.length));
+}
+
 async function listExpenses(db, data) {
   await requireSession(db, data.sessionToken, ['admin', 'member'], data.tripId);
   const snap = await db.collection('trips').doc(data.tripId).collection('expenses').get();
@@ -15,6 +31,7 @@ async function addExpense(db, data) {
 
   if (!CATEGORIES.includes(category)) throw new Error('INVALID_CATEGORY');
   if (!(Number(amount) > 0)) throw new Error('INVALID_AMOUNT');
+  if (photoPath && !isValidPhotoPath(tripId, photoPath)) throw new Error('INVALID_PHOTO_PATH');
 
   let enteredBy;
   if (session.role === 'member') {
@@ -71,7 +88,12 @@ async function updateExpense(db, data) {
   }
   if ('merchant' in patch) update.merchant = patch.merchant;
   if ('detail' in patch) update.detail = patch.detail;
-  if ('photoPath' in patch) update.photoPath = patch.photoPath;
+  if ('photoPath' in patch) {
+    if (patch.photoPath !== null && !isValidPhotoPath(tripId, patch.photoPath)) {
+      throw new Error('INVALID_PHOTO_PATH');
+    }
+    update.photoPath = patch.photoPath;
+  }
 
   update.updatedAt = Date.now();
   await ref.update(update);

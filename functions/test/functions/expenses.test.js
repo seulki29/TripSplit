@@ -172,6 +172,75 @@ describe('expenses', () => {
     expect(snap.data().amount).toBe(10000);
     expect(snap.data().category).toBe('식비');
   });
+
+  test('addExpense rejects a photoPath belonging to a different trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    await expect(addExpense(db, {
+      sessionToken: token,
+      tripId: 't1',
+      date: '2026-08-01',
+      category: '식비',
+      amount: 10000,
+      photoPath: `receipts/othertrip/${'a'.repeat(32)}.jpg`,
+    })).rejects.toThrow('INVALID_PHOTO_PATH');
+  });
+
+  test('addExpense rejects a photoPath outside the receipts namespace', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    await expect(addExpense(db, {
+      sessionToken: token,
+      tripId: 't1',
+      date: '2026-08-01',
+      category: '식비',
+      amount: 10000,
+      photoPath: 'evil/path.jpg',
+    })).rejects.toThrow('INVALID_PHOTO_PATH');
+  });
+
+  test('addExpense accepts a well-formed photoPath for its own trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const photoPath = `receipts/t1/${'a'.repeat(32)}.jpg`;
+
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000, photoPath,
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().photoPath).toBe(photoPath);
+  });
+
+  test('updateExpense rejects a malformed photoPath in the patch', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000,
+    });
+
+    await expect(updateExpense(db, {
+      sessionToken: token, tripId: 't1', expenseId, patch: { photoPath: 'evil/path.jpg' },
+    })).rejects.toThrow('INVALID_PHOTO_PATH');
+  });
+
+  test('updateExpense accepts an explicit null photoPath to clear the photo', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+    const photoPath = `receipts/t1/${'a'.repeat(32)}.jpg`;
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '식비', amount: 10000, photoPath,
+    });
+
+    await expect(updateExpense(db, {
+      sessionToken: token, tripId: 't1', expenseId, patch: { photoPath: null },
+    })).resolves.toEqual({ ok: true });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().photoPath).toBeNull();
+  });
 });
 
 async function seed() {
