@@ -1,6 +1,8 @@
 const MESSAGES = {
   UNAUTHENTICATED: '세션이 만료되었습니다. 다시 로그인해주세요.',
+  SESSION_EXPIRED: '세션이 만료되었습니다. 다시 로그인해주세요.',
   PERMISSION_DENIED: '권한이 없습니다.',
+  RATE_LIMITED: '요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.',
   INVALID_PASSWORD: '비밀번호가 올바르지 않습니다.',
   INVALID_PIN: 'PIN이 올바르지 않습니다.',
   TOO_MANY_ATTEMPTS: '시도가 너무 많습니다. 잠시 후 다시 시도해주세요.',
