@@ -133,6 +133,7 @@ function openMemberModal(body, slug, member) {
   openModal(isEdit ? '구성원 수정' : '구성원 추가', `
     <div class="field"><label class="label">이름</label><input class="input" id="mm-name" value="${escapeHtml(member?.name || '')}"></div>
     <div class="field"><label class="label">정산 가중치</label><input type="number" step="0.1" class="input" id="mm-weight" value="${member?.weight ?? 1}"></div>
+    <p class="muted" style="font-size:12px;margin-top:-0.3rem;margin-bottom:0.6rem">정산 시 부담하는 비율입니다. 기본 1. 예: 자녀 2명과 함께 참여하면 3으로 설정.</p>
     <div class="field"><label class="label">계좌 (선택)</label><input class="input" id="mm-account" value="${escapeHtml(member?.account || '')}"></div>
     <button type="button" class="btn btn-primary btn-block" id="mm-submit">${isEdit ? '저장' : '추가'}</button>
     <p class="muted" id="mm-error" style="margin-top:0.5rem;font-size:13px"></p>
@@ -202,18 +203,18 @@ async function renderExpensesTab(body, slug, myToken) {
     <div id="expenses-list"></div>`;
 
   document.getElementById('expenses-list').innerHTML = expenses.map((e) => `
-    <div class="card" style="margin-bottom:0.6rem">
-      <div style="display:flex;justify-content:space-between">
-        <div>
+    <div class="card${e.photoPath ? ' expense-card-receipt' : ''}" data-id="${e.id}" style="margin-bottom:0.6rem${e.photoPath ? ';cursor:pointer' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem">
+        <div style="min-width:0">
           ${exclusionMode ? `<input type="checkbox" class="excl-check" data-id="${e.id}" style="margin-right:0.5rem">` : ''}
           <span class="tag">${e.category}</span>
           <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
           <span class="muted" style="font-size:12px;margin-left:0.5rem">${escapeHtml(e.date)} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
           ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">확정됨</span>' : ''}
+          ${e.photoPath ? '<span class="muted" style="font-size:11px;margin-left:0.4rem">📷</span>' : ''}
         </div>
-        <div>
+        <div class="card-actions">
           <button type="button" class="btn btn-secondary expense-confirm" data-id="${e.id}" data-confirmed="${e.confirmed}">${e.confirmed ? '확정 해제' : '확정'}</button>
-          ${e.photoPath ? `<button type="button" class="btn btn-secondary expense-receipt" data-id="${e.id}">영수증</button>` : ''}
           <button type="button" class="btn btn-danger expense-delete" data-id="${e.id}">삭제</button>
         </div>
       </div>
@@ -222,7 +223,8 @@ async function renderExpensesTab(body, slug, myToken) {
     </div>`).join('');
 
   body.querySelectorAll('.expense-confirm').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
       btn.disabled = true;
       try {
         await callFunction('confirmExpense', { tripId: session.tripId, expenseId: btn.dataset.id, confirmed: btn.dataset.confirmed !== 'true' });
@@ -234,7 +236,8 @@ async function renderExpensesTab(body, slug, myToken) {
     });
   });
   body.querySelectorAll('.expense-delete').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
       btn.disabled = true;
       try {
         await callFunction('deleteExpense', { tripId: session.tripId, expenseId: btn.dataset.id });
@@ -245,10 +248,15 @@ async function renderExpensesTab(body, slug, myToken) {
       }
     });
   });
-  body.querySelectorAll('.expense-receipt').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+  body.querySelectorAll('.excl-check').forEach((chk) => {
+    chk.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+    });
+  });
+  body.querySelectorAll('.expense-card-receipt').forEach((card) => {
+    card.addEventListener('click', async () => {
       try {
-        const { url } = await callFunction('getReceiptUrl', { tripId: session.tripId, expenseId: btn.dataset.id });
+        const { url } = await callFunction('getReceiptUrl', { tripId: session.tripId, expenseId: card.dataset.id });
         openModal('영수증', `<img src="${escapeHtml(url)}" style="width:100%;border-radius:4px" alt="영수증 사진">`);
       } catch (err) {
         showToast(err.message, 'error');
