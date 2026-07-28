@@ -1,3 +1,6 @@
+let lastFocused = null;
+let escHandler = null;
+
 function getModalRoot() {
   let overlay = document.getElementById('modal-overlay');
   if (overlay) return overlay;
@@ -6,7 +9,7 @@ function getModalRoot() {
   overlay.id = 'modal-overlay';
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal-box">
+    <div class="modal-box" role="dialog" aria-modal="true">
       <div class="modal-header">
         <span class="modal-title"></span>
         <button type="button" class="modal-close" aria-label="닫기">&times;</button>
@@ -21,14 +24,26 @@ function getModalRoot() {
 
 function openModal(titleHTML, bodyHTML) {
   const overlay = getModalRoot();
+  const box = overlay.querySelector('.modal-box');
   overlay.querySelector('.modal-title').textContent = titleHTML;
+  box.setAttribute('aria-label', String(titleHTML));
   overlay.querySelector('.modal-body').innerHTML = bodyHTML;
   overlay.classList.add('open');
+
+  if (escHandler) document.removeEventListener('keydown', escHandler);
+  lastFocused = document.activeElement;
+  escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
+  document.addEventListener('keydown', escHandler);
+
+  const first = overlay.querySelector('.modal-body input, .modal-body select, .modal-body textarea, .modal-body button');
+  if (first) first.focus();
 }
 
 function closeModal() {
   const overlay = document.getElementById('modal-overlay');
   if (overlay) overlay.classList.remove('open');
+  if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
+  if (lastFocused && typeof lastFocused.focus === 'function') { lastFocused.focus(); lastFocused = null; }
 }
 
 function showToast(message, kind = 'info') {

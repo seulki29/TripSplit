@@ -77,6 +77,44 @@ describe('ui.js', () => {
     assert.doesNotThrow(() => closeModal());
   });
 
+  test('openModal sets dialog a11y attributes and Escape closes it', () => {
+    openModal('테스트', '<input id="mx">');
+    const box = document.querySelector('.modal-box');
+    assert.equal(box.getAttribute('role'), 'dialog');
+    assert.equal(box.getAttribute('aria-modal'), 'true');
+    const overlay = document.getElementById('modal-overlay');
+    assert.ok(overlay.classList.contains('open'));
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+    assert.ok(!overlay.classList.contains('open'));
+  });
+
+  test('openModal sets aria-label to the title and focuses the first field', () => {
+    openModal('제목입니다', '<input id="first-field"><input id="second-field">');
+    const box = document.querySelector('.modal-box');
+    assert.equal(box.getAttribute('aria-label'), '제목입니다');
+    assert.equal(document.activeElement.id, 'first-field');
+    closeModal();
+  });
+
+  test('closeModal returns focus to the element that was focused before openModal was called', () => {
+    const opener = document.createElement('button');
+    opener.id = 'opener-btn';
+    document.body.appendChild(opener);
+    opener.focus();
+    openModal('제목', '<input id="mx">');
+    closeModal();
+    assert.equal(document.activeElement.id, 'opener-btn');
+  });
+
+  test('Escape after closeModal no longer triggers a close (listener is removed)', () => {
+    openModal('제목', '<input id="mx">');
+    closeModal();
+    const overlay = document.getElementById('modal-overlay');
+    overlay.classList.add('open');
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+    assert.ok(overlay.classList.contains('open'));
+  });
+
   test('escapeHtml neutralizes HTML-significant characters', () => {
     assert.equal(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
     assert.equal(escapeHtml(`"quoted" & 'single'`), '&quot;quoted&quot; &amp; &#39;single&#39;');
