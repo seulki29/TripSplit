@@ -54,7 +54,15 @@ function render(root, slug) {
 
 async function renderSetupTab(body, slug, myToken) {
   const session = getSession();
-  const trip = await callFunction('getTripSetup', { tripId: session.tripId });
+  let trip;
+  try {
+    trip = await callFunction('getTripSetup', { tripId: session.tripId });
+  } catch (err) {
+    if (myToken !== renderToken) return;
+    body.innerHTML = `<p class="muted">불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="tab-retry">다시 시도</button>`;
+    body.querySelector('#tab-retry').addEventListener('click', () => renderSetupTab(body, slug, myToken));
+    return;
+  }
   if (myToken !== renderToken) return;
 
   body.innerHTML = `
@@ -65,6 +73,8 @@ async function renderSetupTab(body, slug, myToken) {
     <button type="button" class="btn btn-primary" id="setup-save">저장</button>`;
 
   document.getElementById('setup-save').addEventListener('click', async () => {
+    const btn = document.getElementById('setup-save');
+    btn.disabled = true; btn.textContent = '저장 중...';
     try {
       await callFunction('updateTripSetup', {
         tripId: session.tripId,
@@ -75,7 +85,9 @@ async function renderSetupTab(body, slug, myToken) {
         },
       });
       showToast('저장되었습니다', 'success');
+      btn.disabled = false; btn.textContent = '저장';
     } catch (err) {
+      btn.disabled = false; btn.textContent = '저장';
       showToast(err.message, 'error');
     }
   });
@@ -83,7 +95,14 @@ async function renderSetupTab(body, slug, myToken) {
 
 async function renderMembersTab(body, slug, myToken) {
   const session = getSession();
-  membersCache = await callFunction('listMembers', { tripId: session.tripId });
+  try {
+    membersCache = await callFunction('listMembers', { tripId: session.tripId });
+  } catch (err) {
+    if (myToken !== renderToken) return;
+    body.innerHTML = `<p class="muted">불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="tab-retry">다시 시도</button>`;
+    body.querySelector('#tab-retry').addEventListener('click', () => renderMembersTab(body, slug, myToken));
+    return;
+  }
   if (myToken !== renderToken) return;
 
   body.innerHTML = `
@@ -119,6 +138,12 @@ function openMemberModal(body, slug, member) {
     <p class="muted" id="mm-error" style="margin-top:0.5rem;font-size:13px"></p>
   `);
 
+  ['mm-name', 'mm-weight', 'mm-account'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('mm-submit').click();
+    });
+  });
+
   document.getElementById('mm-submit').addEventListener('click', async () => {
     const session = getSession();
     const btn = document.getElementById('mm-submit');
@@ -148,10 +173,18 @@ function openMemberModal(body, slug, member) {
 
 async function renderExpensesTab(body, slug, myToken) {
   const session = getSession();
-  const [expenses, members] = await Promise.all([
-    callFunction('listExpenses', { tripId: session.tripId }),
-    callFunction('listMembersForLogin', { slug }),
-  ]);
+  let expenses, members;
+  try {
+    [expenses, members] = await Promise.all([
+      callFunction('listExpenses', { tripId: session.tripId }),
+      callFunction('listMembersForLogin', { slug }),
+    ]);
+  } catch (err) {
+    if (myToken !== renderToken) return;
+    body.innerHTML = `<p class="muted">불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="tab-retry">다시 시도</button>`;
+    body.querySelector('#tab-retry').addEventListener('click', () => renderExpensesTab(body, slug, myToken));
+    return;
+  }
   if (myToken !== renderToken) return;
 
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
@@ -176,10 +209,10 @@ async function renderExpensesTab(body, slug, myToken) {
           <span class="tag">${e.category}</span>
           <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
           <span class="muted" style="font-size:12px;margin-left:0.5rem">${escapeHtml(e.date)} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
-          ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">컴펌됨</span>' : ''}
+          ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">확정됨</span>' : ''}
         </div>
         <div>
-          <button type="button" class="btn btn-secondary expense-confirm" data-id="${e.id}" data-confirmed="${e.confirmed}">${e.confirmed ? '컴펌 해제' : '컴펌'}</button>
+          <button type="button" class="btn btn-secondary expense-confirm" data-id="${e.id}" data-confirmed="${e.confirmed}">${e.confirmed ? '확정 해제' : '확정'}</button>
           ${e.photoPath ? `<button type="button" class="btn btn-secondary expense-receipt" data-id="${e.id}">영수증</button>` : ''}
           <button type="button" class="btn btn-danger expense-delete" data-id="${e.id}">삭제</button>
         </div>
@@ -190,20 +223,24 @@ async function renderExpensesTab(body, slug, myToken) {
 
   body.querySelectorAll('.expense-confirm').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      btn.disabled = true;
       try {
         await callFunction('confirmExpense', { tripId: session.tripId, expenseId: btn.dataset.id, confirmed: btn.dataset.confirmed !== 'true' });
         await renderExpensesTab(body, slug, myToken);
       } catch (err) {
+        btn.disabled = false;
         showToast(err.message, 'error');
       }
     });
   });
   body.querySelectorAll('.expense-delete').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      btn.disabled = true;
       try {
         await callFunction('deleteExpense', { tripId: session.tripId, expenseId: btn.dataset.id });
         await renderExpensesTab(body, slug, myToken);
       } catch (err) {
+        btn.disabled = false;
         showToast(err.message, 'error');
       }
     });
@@ -301,6 +338,12 @@ function openAdminExpenseModal(body, slug, members) {
   }
   rerenderCategoryChips();
 
+  ['ae-amount', 'ae-merchant', 'ae-detail'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('ae-submit').click();
+    });
+  });
+
   document.getElementById('ae-photo').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -328,6 +371,8 @@ function openAdminExpenseModal(body, slug, members) {
 
   document.getElementById('ae-submit').addEventListener('click', async () => {
     const session = getSession();
+    const btn = document.getElementById('ae-submit');
+    btn.disabled = true; btn.textContent = '저장 중...';
     try {
       await callFunction('addExpense', {
         tripId: session.tripId,
@@ -346,6 +391,7 @@ function openAdminExpenseModal(body, slug, members) {
         showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
       }
     } catch (err) {
+      btn.disabled = false; btn.textContent = '입력 완료';
       document.getElementById('ae-error').textContent = err.message;
     }
   });
