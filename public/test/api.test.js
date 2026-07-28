@@ -15,6 +15,7 @@ globalThis.location = { hostname: 'localhost', href: '', reload: mock.fn() };
 
 const { setSession } = await import('../session.js');
 const { callFunction } = await import('../api.js');
+const { errorMessageFor } = await import('../errorMessages.js');
 
 function fakeFetchOnce(status, body) {
   return mock.fn(async () => ({
@@ -23,6 +24,14 @@ function fakeFetchOnce(status, body) {
     json: async () => body,
   }));
 }
+
+describe('errorMessageFor', () => {
+  test('translates known codes to Korean and falls back for unknown', () => {
+    assert.equal(errorMessageFor('INVALID_PIN'), 'PIN이 올바르지 않습니다.');
+    assert.equal(errorMessageFor('TOO_MANY_ATTEMPTS'), '시도가 너무 많습니다. 잠시 후 다시 시도해주세요.');
+    assert.equal(errorMessageFor('SOMETHING_UNMAPPED'), '요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.');
+  });
+});
 
 describe('callFunction', () => {
   beforeEach(() => {
@@ -60,14 +69,40 @@ describe('callFunction', () => {
     assert.equal(JSON.parse(options.body).data.sessionToken, 'explicit-token');
   });
 
-  test('throws with the domain error message and status on a callable error response', async () => {
+  test('throws with a translated Korean message on a callable error response, preserving the raw status', async () => {
     globalThis.fetch = fakeFetchOnce(400, { error: { status: 'INVALID_ARGUMENT', message: 'INVALID_PIN' } });
 
     await assert.rejects(
       () => callFunction('verifyAdminPin', { slug: 'x', pin: '0000' }),
       (err) => {
-        assert.equal(err.message, 'INVALID_PIN');
+        assert.equal(err.message, 'PIN이 올바르지 않습니다.');
         assert.equal(err.status, 'INVALID_ARGUMENT');
+        return true;
+      }
+    );
+  });
+
+  test('callFunction throws a translated Korean message but preserves err.status', async () => {
+    globalThis.fetch = fakeFetchOnce(400, { error: { status: 'INVALID_PIN', message: 'INVALID_PIN' } });
+
+    await assert.rejects(
+      () => callFunction('verifyAdminPin', { slug: 's', pin: '0' }),
+      (err) => {
+        assert.equal(err.message, 'PIN이 올바르지 않습니다.');
+        assert.equal(err.status, 'INVALID_PIN');
+        return true;
+      }
+    );
+  });
+
+  test('falls back to a generic Korean message for an unmapped domain error code', async () => {
+    globalThis.fetch = fakeFetchOnce(400, { error: { status: 'FAILED_PRECONDITION', message: 'SOMETHING_UNMAPPED' } });
+
+    await assert.rejects(
+      () => callFunction('someFn', {}),
+      (err) => {
+        assert.equal(err.message, '요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.');
+        assert.equal(err.status, 'FAILED_PRECONDITION');
         return true;
       }
     );

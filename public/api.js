@@ -1,4 +1,5 @@
 import { getSession, clearSession } from './session.js';
+import { errorMessageFor } from './errorMessages.js';
 
 const REGION = 'asia-northeast3';
 const PROD_PROJECT_ID = 'sfayw-10d11';
@@ -33,14 +34,17 @@ async function callFunction(name, data = {}) {
 
   if (!res.ok || body.error) {
     const status = (body.error?.status || '').toUpperCase();
-    const message = body.error?.message || '알 수 없는 오류가 발생했습니다.';
+    // The backend's HttpsError carries the domain-specific code in `message`
+    // (e.g. "INVALID_PIN"), while `status` is the generic gRPC-style code
+    // (e.g. "INVALID_ARGUMENT") used only for the branching below.
+    const code = body.error?.message || '';
 
     if (status === 'UNAUTHENTICATED' || status === 'PERMISSION_DENIED') {
       clearSession();
       location.reload();
     }
 
-    const err = new Error(message);
+    const err = new Error(errorMessageFor(code));
     err.status = status;
     throw err;
   }
