@@ -13,7 +13,15 @@ async function renderReportInto(container, slug) {
   const session = getSession();
   container.innerHTML = '<p class="muted">불러오는 중...</p>';
 
-  const data = await callFunction('getReportData', { tripId: session.tripId });
+  let data;
+  try {
+    data = await callFunction('getReportData', { tripId: session.tripId });
+  } catch (err) {
+    container.innerHTML = `<p class="muted">리포트를 불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="report-retry">다시 시도</button>`;
+    const rb = container.querySelector('#report-retry');
+    if (rb) rb.addEventListener('click', () => renderReportInto(container, slug));
+    return;
+  }
   const { trip, members, expenses, settlement, currentCategoryAverages, groupCategoryAverages, tripsInComparison } = data;
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
   const confirmedExpenses = expenses.filter((e) => e.confirmed);
