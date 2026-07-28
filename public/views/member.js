@@ -41,10 +41,17 @@ async function render(root, slug) {
 
 async function loadExpenses(root, slug) {
   const session = getSession();
-  const [expenses, members] = await Promise.all([
-    callFunction('listExpenses', { tripId: session.tripId }),
-    callFunction('listMembersForLogin', { slug }),
-  ]);
+  let expenses, members;
+  try {
+    [expenses, members] = await Promise.all([
+      callFunction('listExpenses', { tripId: session.tripId }),
+      callFunction('listMembersForLogin', { slug }),
+    ]);
+  } catch (err) {
+    root.querySelector('#member-expenses-list').innerHTML = `<p class="muted">불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="me-retry">다시 시도</button>`;
+    root.querySelector('#me-retry').addEventListener('click', () => loadExpenses(root, slug));
+    return;
+  }
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
 
   root.querySelector('#member-expenses-list').innerHTML = expenses.map((e) => {
@@ -57,7 +64,7 @@ async function loadExpenses(root, slug) {
             <span class="tag">${e.category}</span>
             <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
             <span class="muted" style="font-size:12px;margin-left:0.5rem">${escapeHtml(e.date)} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
-            ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">🔒 컴펌됨</span>' : ''}
+            ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">🔒 확정됨</span>' : ''}
           </div>
           ${canEdit ? `<button type="button" class="btn btn-secondary member-delete" data-id="${e.id}">삭제</button>` : ''}
         </div>
@@ -68,10 +75,12 @@ async function loadExpenses(root, slug) {
 
   root.querySelectorAll('.member-delete').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      btn.disabled = true;
       try {
         await callFunction('deleteExpense', { tripId: session.tripId, expenseId: btn.dataset.id });
         await loadExpenses(root, slug);
       } catch (err) {
+        btn.disabled = false;
         showToast(err.message, 'error');
       }
     });
@@ -102,6 +111,12 @@ function openExpenseModal(root, slug) {
   }
   rerenderCategoryChips();
 
+  ['me-amount', 'me-merchant', 'me-detail'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('me-submit').click();
+    });
+  });
+
   document.getElementById('me-photo').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -129,6 +144,8 @@ function openExpenseModal(root, slug) {
 
   document.getElementById('me-submit').addEventListener('click', async () => {
     const session = getSession();
+    const btn = document.getElementById('me-submit');
+    btn.disabled = true; btn.textContent = '저장 중...';
     try {
       await callFunction('addExpense', {
         tripId: session.tripId,
@@ -142,6 +159,7 @@ function openExpenseModal(root, slug) {
       closeModal();
       await loadExpenses(document.getElementById('app'), slug);
     } catch (err) {
+      btn.disabled = false; btn.textContent = '입력 완료';
       document.getElementById('me-error').textContent = err.message;
     }
   });
