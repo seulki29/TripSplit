@@ -149,3 +149,10 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 .center { text-align: center; }
 .muted { color: var(--ink-3); }
 .section { padding: 2rem 0; border-top: 1px solid var(--rule); }
+
+/* ── EXPENSE CARD ACTIONS (compact, no-wrap on mobile) ── */
+.card-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 0.35rem; }
+.card-actions .btn { padding: 0.35rem 0.6rem; font-size: 12px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .card-actions .btn { padding: 0.3rem 0.5rem; font-size: 11px; }
+}
