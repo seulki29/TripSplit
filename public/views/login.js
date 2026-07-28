@@ -52,6 +52,10 @@ function renderAdminForm(root, slug, myToken) {
       document.getElementById('login-error').textContent = err.message;
     }
   });
+
+  document.getElementById('login-admin-pin').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-admin-submit').click();
+  });
 }
 
 async function renderMemberForm(root, slug, myToken) {
@@ -98,6 +102,10 @@ async function renderMemberForm(root, slug, myToken) {
       btn.disabled = false; btn.textContent = '입장';
       document.getElementById('login-error').textContent = err.message;
     }
+  });
+
+  document.getElementById('login-member-pin').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-member-submit').click();
   });
 }
 

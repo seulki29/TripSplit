@@ -36,6 +36,10 @@ function renderLogin(root) {
       document.getElementById('sa-error').textContent = err.message;
     }
   });
+
+  document.getElementById('sa-password').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('sa-login-btn').click();
+  });
 }
 
 async function renderDashboard(root) {
@@ -102,6 +106,8 @@ function openCreateTripModal(root) {
   `);
 
   document.getElementById('ct-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('ct-submit');
+    btn.disabled = true; btn.textContent = '생성 중...';
     try {
       await callFunction('createTrip', {
         name: document.getElementById('ct-name').value,
@@ -118,8 +124,15 @@ function openCreateTripModal(root) {
         showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
       }
     } catch (err) {
+      btn.disabled = false; btn.textContent = '생성';
       document.getElementById('ct-error').textContent = err.message;
     }
+  });
+
+  ['ct-name', 'ct-slug', 'ct-group', 'ct-admin-pin', 'ct-member-pin'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('ct-submit').click();
+    });
   });
 }
 
@@ -143,6 +156,8 @@ function openReissueModal(root, tripId) {
       return;
     }
 
+    const btn = document.getElementById('ri-submit');
+    btn.disabled = true; btn.textContent = '저장 중...';
     try {
       await callFunction('updateTrip', { tripId, patch });
       closeModal();
@@ -153,8 +168,15 @@ function openReissueModal(root, tripId) {
         showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
       }
     } catch (err) {
+      btn.disabled = false; btn.textContent = '저장';
       document.getElementById('ri-error').textContent = err.message;
     }
+  });
+
+  ['ri-admin-pin', 'ri-member-pin'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('ri-submit').click();
+    });
   });
 }
 
