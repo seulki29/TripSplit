@@ -215,6 +215,7 @@ async function renderExpensesTab(body, slug, myToken) {
         </div>
         <div class="card-actions">
           <button type="button" class="btn btn-secondary expense-confirm" data-id="${e.id}" data-confirmed="${e.confirmed}">${e.confirmed ? '확정 해제' : '확정'}</button>
+          <button type="button" class="btn btn-secondary expense-edit" data-id="${e.id}">수정</button>
           <button type="button" class="btn btn-danger expense-delete" data-id="${e.id}">삭제</button>
         </div>
       </div>
@@ -246,6 +247,13 @@ async function renderExpensesTab(body, slug, myToken) {
         btn.disabled = false;
         showToast(err.message, 'error');
       }
+    });
+  });
+  body.querySelectorAll('.expense-edit').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const exp = expenses.find((x) => x.id === btn.dataset.id);
+      openAdminExpenseEditModal(body, slug, exp);
     });
   });
   body.querySelectorAll('.excl-check').forEach((chk) => {
@@ -401,6 +409,51 @@ function openAdminExpenseModal(body, slug, members) {
     } catch (err) {
       btn.disabled = false; btn.textContent = '입력 완료';
       document.getElementById('ae-error').textContent = err.message;
+    }
+  });
+}
+
+function openAdminExpenseEditModal(body, slug, exp) {
+  let category = exp.category;
+  openModal('경비 수정', `
+    <div class="field"><label class="label">카테고리</label><div id="ee-category"></div></div>
+    <div class="field"><label class="label">날짜</label><input type="date" class="input" id="ee-date" value="${escapeHtml(exp.date || '')}"></div>
+    <div class="field"><label class="label">금액</label><input type="number" class="input" id="ee-amount" value="${Number(exp.amount) || ''}"></div>
+    <div class="field"><label class="label">상호명</label><input class="input" id="ee-merchant" value="${escapeHtml(exp.merchant || '')}"></div>
+    <div class="field"><label class="label">세부사항</label><input class="input" id="ee-detail" value="${escapeHtml(exp.detail || '')}"></div>
+    <button type="button" class="btn btn-primary btn-block" id="ee-submit">저장</button>
+    <p class="muted" id="ee-error" style="margin-top:0.5rem;font-size:13px"></p>
+  `);
+
+  function rerenderChips() {
+    renderChipGroup(document.getElementById('ee-category'), CATEGORIES, category, (c) => { category = c; rerenderChips(); });
+  }
+  rerenderChips();
+
+  ['ee-amount', 'ee-merchant', 'ee-detail'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('ee-submit').click(); });
+  });
+
+  document.getElementById('ee-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('ee-submit');
+    btn.disabled = true; btn.textContent = '저장 중...';
+    try {
+      await callFunction('updateExpense', {
+        tripId: getSession().tripId,
+        expenseId: exp.id,
+        patch: {
+          category,
+          date: document.getElementById('ee-date').value,
+          amount: Number(document.getElementById('ee-amount').value),
+          merchant: document.getElementById('ee-merchant').value,
+          detail: document.getElementById('ee-detail').value,
+        },
+      });
+      closeModal();
+      await renderExpensesTab(body, slug, renderToken);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = '저장';
+      document.getElementById('ee-error').textContent = err.message;
     }
   });
 }
