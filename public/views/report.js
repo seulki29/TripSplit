@@ -47,10 +47,10 @@ async function renderReportInto(container, slug) {
     <div class="section"><h2>최종 정산</h2>${renderSettlement(settlement.perMember, session.role === 'admin')}</div>
     <div class="section"><h2>영수증 갤러리</h2><div id="report-gallery"><p class="muted">불러오는 중...</p></div></div>`;
 
-  container.querySelectorAll('.report-receipt').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+  container.querySelectorAll('.report-receipt-row').forEach((row) => {
+    row.addEventListener('click', async () => {
       try {
-        const { url } = await callFunction('getReceiptUrl', { tripId: session.tripId, expenseId: btn.dataset.id });
+        const { url } = await callFunction('getReceiptUrl', { tripId: session.tripId, expenseId: row.dataset.id });
         openModal('영수증', `<img src="${escapeHtml(url)}" style="width:100%;border-radius:4px" alt="영수증">`);
       } catch (err) { showToast(err.message, 'error'); }
     });
@@ -58,10 +58,19 @@ async function renderReportInto(container, slug) {
 
   container.querySelectorAll('.settle-toggle').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      const next = btn.dataset.settled !== 'true';
+      btn.disabled = true;
       try {
-        await callFunction('setMemberSettled', { tripId: session.tripId, memberId: btn.dataset.id, settled: btn.dataset.settled !== 'true' });
-        await renderReportInto(container, slug);
-      } catch (err) { showToast(err.message, 'error'); }
+        await callFunction('setMemberSettled', { tripId: session.tripId, memberId: btn.dataset.id, settled: next });
+        const card = btn.closest('[data-member-id]');
+        card.querySelector('.settle-badge').innerHTML = next ? '<span class="badge badge-locked" style="margin-left:0.4rem">입금완료</span>' : '';
+        btn.dataset.settled = String(next);
+        btn.textContent = next ? '입금완료 해제' : '입금완료 표시';
+        btn.disabled = false;
+      } catch (err) {
+        btn.disabled = false;
+        showToast(err.message, 'error');
+      }
     });
   });
 
@@ -97,12 +106,12 @@ function renderExpenseTable(expenses, nameById) {
       </tr></thead>
       <tbody>
         ${expenses.map((e) => `
-          <tr style="border-top:1px solid var(--rule)">
+          <tr style="border-top:1px solid var(--rule)${e.photoPath ? ';cursor:pointer' : ''}" ${e.photoPath ? `class="report-receipt-row" data-id="${e.id}"` : ''}>
             <td style="padding:0.6rem 0.5rem">${escapeHtml(e.date)}</td>
             <td><span class="tag">${e.category}</span></td>
             <td>${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}
               ${e.excludedMembers && e.excludedMembers.length ? `<span class="muted" style="font-size:11px">· 제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</span>` : ''}
-              ${e.photoPath ? `<button type="button" class="report-receipt" data-id="${e.id}" style="font-size:11px;background:none;border:none;color:var(--accent);cursor:pointer">영수증</button>` : ''}
+              ${e.photoPath ? '<span class="muted" style="font-size:11px">· 📷</span>' : ''}
             </td>
             <td>${escapeHtml(nameById[e.enteredBy] || '?')}</td>
             <td style="text-align:right" class="mono">${Number(e.amount).toLocaleString()}원</td>
@@ -173,9 +182,9 @@ function renderSettlement(perMember, isAdmin) {
   return `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)">
       ${perMember.map((m) => `
-        <div style="background:var(--paper);padding:1rem">
+        <div style="background:var(--paper);padding:1rem" data-member-id="${m.id}">
           <p style="font-family:var(--f-kr);font-weight:500">${escapeHtml(m.name)}
-            ${m.settled ? '<span class="badge badge-locked" style="margin-left:0.4rem">입금완료</span>' : ''}</p>
+            <span class="settle-badge">${m.settled ? '<span class="badge badge-locked" style="margin-left:0.4rem">입금완료</span>' : ''}</span></p>
           <p class="muted" style="font-size:12px">내야 할 금액 ${m.due.toLocaleString()}원 · 실제 지출 ${m.paid.toLocaleString()}원</p>
           <p class="mono" style="font-family:var(--f-display);font-weight:700;color:var(--${m.net >= 0 ? 'receive' : 'pay'})">${m.net >= 0 ? '+' : ''}${m.net.toLocaleString()}원</p>
           ${m.account ? `<p class="muted" style="font-size:12px">계좌 ${escapeHtml(m.account)}</p>` : ''}
