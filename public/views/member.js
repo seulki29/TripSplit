@@ -58,15 +58,20 @@ async function loadExpenses(root, slug) {
     const isMine = e.enteredBy === session.memberId;
     const canEdit = isMine && !e.confirmed;
     return `
-      <div class="card" style="margin-bottom:0.6rem;${e.confirmed ? 'opacity:0.7' : ''}">
-        <div style="display:flex;justify-content:space-between">
-          <div>
+      <div class="card${e.photoPath ? ' expense-card-receipt' : ''}" data-id="${e.id}" style="margin-bottom:0.6rem;${e.confirmed ? 'opacity:0.7;' : ''}${e.photoPath ? 'cursor:pointer' : ''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem">
+          <div style="min-width:0">
             <span class="tag">${e.category}</span>
             <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
             <span class="muted" style="font-size:12px;margin-left:0.5rem">${escapeHtml(e.date)} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
             ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">🔒 확정됨</span>' : ''}
+            ${e.photoPath ? '<span class="muted" style="font-size:11px;margin-left:0.4rem">📷</span>' : ''}
           </div>
-          ${canEdit ? `<button type="button" class="btn btn-secondary member-delete" data-id="${e.id}">삭제</button>` : ''}
+          ${canEdit ? `
+          <div class="card-actions">
+            <button type="button" class="btn btn-secondary member-edit" data-id="${e.id}">수정</button>
+            <button type="button" class="btn btn-secondary member-delete" data-id="${e.id}">삭제</button>
+          </div>` : ''}
         </div>
         <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}</p>
         ${e.excludedMembers && e.excludedMembers.length ? `<p class="muted" style="font-size:12px">제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</p>` : ''}
@@ -74,13 +79,33 @@ async function loadExpenses(root, slug) {
   }).join('');
 
   root.querySelectorAll('.member-delete').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
       btn.disabled = true;
       try {
         await callFunction('deleteExpense', { tripId: session.tripId, expenseId: btn.dataset.id });
         await loadExpenses(root, slug);
       } catch (err) {
         btn.disabled = false;
+        showToast(err.message, 'error');
+      }
+    });
+  });
+
+  root.querySelectorAll('.member-edit').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const exp = expenses.find((x) => x.id === btn.dataset.id);
+      openMemberExpenseEditModal(root, slug, exp);
+    });
+  });
+
+  root.querySelectorAll('.expense-card-receipt').forEach((card) => {
+    card.addEventListener('click', async () => {
+      try {
+        const { url } = await callFunction('getReceiptUrl', { tripId: session.tripId, expenseId: card.dataset.id });
+        openModal('영수증', `<img src="${escapeHtml(url)}" style="width:100%;border-radius:4px" alt="영수증 사진">`);
+      } catch (err) {
         showToast(err.message, 'error');
       }
     });
@@ -161,6 +186,58 @@ function openExpenseModal(root, slug) {
     } catch (err) {
       btn.disabled = false; btn.textContent = '입력 완료';
       document.getElementById('me-error').textContent = err.message;
+    }
+  });
+}
+
+function openMemberExpenseEditModal(root, slug, exp) {
+  let category = exp.category;
+  const session = getSession();
+
+  openModal('경비 수정', `
+    <div class="field"><label class="label">카테고리</label><div id="mee-category"></div></div>
+    <div class="field"><label class="label">날짜</label><input type="date" class="input" id="mee-date" value="${escapeHtml(exp.date || '')}"></div>
+    <div class="field"><label class="label">금액</label><input type="number" class="input" id="mee-amount" value="${Number(exp.amount) || ''}"></div>
+    <div class="field"><label class="label">상호명</label><input class="input" id="mee-merchant" value="${escapeHtml(exp.merchant || '')}"></div>
+    <div class="field"><label class="label">세부사항</label><input class="input" id="mee-detail" value="${escapeHtml(exp.detail || '')}"></div>
+    <button type="button" class="btn btn-primary btn-block" id="mee-submit">저장</button>
+    <p class="muted" id="mee-error" style="margin-top:0.5rem;font-size:13px"></p>
+  `);
+
+  function rerenderChips() {
+    renderChipGroup(document.getElementById('mee-category'), CATEGORIES, category, (c) => {
+      category = c;
+      rerenderChips();
+    });
+  }
+  rerenderChips();
+
+  ['mee-amount', 'mee-merchant', 'mee-detail'].forEach((id) => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('mee-submit').click();
+    });
+  });
+
+  document.getElementById('mee-submit').addEventListener('click', async () => {
+    const btn = document.getElementById('mee-submit');
+    btn.disabled = true; btn.textContent = '저장 중...';
+    try {
+      await callFunction('updateExpense', {
+        tripId: session.tripId,
+        expenseId: exp.id,
+        patch: {
+          category,
+          date: document.getElementById('mee-date').value,
+          amount: Number(document.getElementById('mee-amount').value),
+          merchant: document.getElementById('mee-merchant').value,
+          detail: document.getElementById('mee-detail').value,
+        },
+      });
+      closeModal();
+      await loadExpenses(root, slug);
+    } catch (err) {
+      btn.disabled = false; btn.textContent = '저장';
+      document.getElementById('mee-error').textContent = err.message;
     }
   });
 }
