@@ -27,8 +27,8 @@ describe('matchRoute', () => {
     assert.deepEqual(matchRoute('/something/else'), { view: 'notfound', params: {} });
   });
 
-  test('the bare root path routes to notfound', () => {
-    assert.deepEqual(matchRoute('/'), { view: 'notfound', params: {} });
+  test('the bare root path routes to the public trip index', () => {
+    assert.deepEqual(matchRoute('/'), { view: 'index', params: {} });
   });
 
   test('/sa with no trailing segment routes to notfound', () => {

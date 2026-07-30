@@ -3,6 +3,10 @@ import { getSession } from './session.js';
 function matchRoute(pathname) {
   const parts = pathname.split('/').filter(Boolean);
 
+  if (parts.length === 0) {
+    return { view: 'index', params: {} };
+  }
+
   if (parts[0] === 'sa' && parts[1]) {
     return { view: 'superadmin', params: {} };
   }
@@ -23,6 +27,12 @@ async function mount() {
 
   if (view === 'notfound') {
     root.innerHTML = '<div class="container center" style="padding:4rem 0"><h2>페이지를 찾을 수 없습니다</h2></div>';
+    return;
+  }
+
+  if (view === 'index') {
+    const mod = await import('./views/index.js');
+    mod.mount(root);
     return;
   }
 
