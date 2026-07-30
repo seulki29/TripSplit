@@ -1,6 +1,6 @@
 import { callFunction } from '../api.js';
 import { getSession } from '../session.js';
-import { openModal, showToast, escapeHtml } from '../ui.js';
+import { openModal, closeModal, showToast, escapeHtml } from '../ui.js';
 
 const CATEGORY_COLORS = {
   숙박: '#1a4a6b',
@@ -44,6 +44,10 @@ async function renderReportInto(container, slug) {
       ${tripsInComparison > 0 ? renderComparisonBars(currentCategoryAverages, groupCategoryAverages) : '<p class="muted">비교할 과거 여행이 아직 없습니다.</p>'}
     </div>
     <div class="section"><h2>결제자별 지출</h2>${renderPayerSummary(settlement.perMember)}</div>
+    <div class="section"><h2>정산 요약</h2>
+      <p>총 확정 지출 <strong class="mono">${settlement.totalConfirmed.toLocaleString()}원</strong></p>
+      <p class="muted" style="font-size:13px">확정 지출을 제외되지 않은 구성원끼리 가중치 비율로 나눠 각자 '내야 할 금액'을 구하고, 실제 결제액과 비교해 차액(받을 돈/낼 돈)을 계산합니다. 아래 최종 정산에서 구성원 카드를 누르면 계산 내역을 볼 수 있습니다.</p>
+    </div>
     <div class="section"><h2>최종 정산</h2>${renderSettlement(settlement.perMember, session.role === 'admin')}</div>
     <div class="section"><h2>영수증 갤러리</h2><div id="report-gallery"><p class="muted">불러오는 중...</p></div></div>`;
 
@@ -57,7 +61,8 @@ async function renderReportInto(container, slug) {
   });
 
   container.querySelectorAll('.settle-toggle').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
       const next = btn.dataset.settled !== 'true';
       btn.disabled = true;
       try {
@@ -71,6 +76,37 @@ async function renderReportInto(container, slug) {
         btn.disabled = false;
         showToast(err.message, 'error');
       }
+    });
+  });
+
+  container.querySelectorAll('.settle-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const m = settlement.perMember.find((x) => x.id === card.dataset.memberId);
+      if (!m) return;
+      const isOwn = session.memberId === m.id;
+      openModal(`${m.name} 정산 상세`, renderSettlementDetail(m, isOwn));
+      if (!isOwn) return;
+      const saveBtn = document.getElementById('sd-account-save');
+      const input = document.getElementById('sd-account');
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveBtn.click(); });
+      saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true; saveBtn.textContent = '저장 중...';
+        try {
+          const account = input.value;
+          await callFunction('setMyAccount', { tripId: session.tripId, account });
+          m.account = account.trim() || null;
+          const line = card.querySelector('.settle-account');
+          if (line) {
+            line.textContent = m.account ? `계좌 ${m.account}` : '';
+            line.style.display = m.account ? '' : 'none';
+          }
+          closeModal();
+          showToast('계좌가 저장되었습니다', 'success');
+        } catch (err) {
+          saveBtn.disabled = false; saveBtn.textContent = '계좌 저장';
+          document.getElementById('sd-account-error').textContent = err.message;
+        }
+      });
     });
   });
 
@@ -178,16 +214,38 @@ function renderPayerSummary(perMember) {
     </div>`;
 }
 
+function renderSettlementDetail(m, isOwn) {
+  const rows = (m.breakdown || []).map((b) => `
+    <tr style="border-top:1px solid var(--rule)">
+      <td style="padding:0.4rem"><span class="tag">${b.category}</span></td>
+      <td>${escapeHtml(b.merchant || '')}</td>
+      <td style="text-align:right" class="mono">${b.share.toLocaleString()}원</td>
+    </tr>`).join('');
+  return `
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr style="text-align:left;font-size:11px;color:var(--ink-3)"><th style="padding:0.4rem">카테고리</th><th>상호</th><th style="text-align:right">내 분담액</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" class="muted" style="padding:0.6rem">포함된 확정 지출이 없습니다.</td></tr>'}</tbody>
+    </table></div>
+    <p style="margin-top:0.8rem">내야 할 금액 <strong class="mono">${m.due.toLocaleString()}원</strong> · 실제 결제 <span class="mono">${m.paid.toLocaleString()}원</span></p>
+    <p class="mono" style="font-weight:700;color:var(--${m.net >= 0 ? 'receive' : 'pay'})">차액 ${m.net >= 0 ? '+' : ''}${m.net.toLocaleString()}원</p>
+    ${m.account ? `<p class="muted" style="font-size:12px">계좌 ${escapeHtml(m.account)}</p>` : ''}
+    ${isOwn ? `
+      <div class="field" style="margin-top:0.8rem"><label class="label">내 계좌 입력/수정</label>
+        <input class="input" id="sd-account" value="${escapeHtml(m.account || '')}" placeholder="예: 우리 1002-123-456789"></div>
+      <button type="button" class="btn btn-primary btn-block" id="sd-account-save">계좌 저장</button>
+      <p class="muted" id="sd-account-error" style="margin-top:0.5rem;font-size:13px"></p>` : ''}`;
+}
+
 function renderSettlement(perMember, isAdmin) {
   return `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)">
       ${perMember.map((m) => `
-        <div style="background:var(--paper);padding:1rem" data-member-id="${m.id}">
+        <div class="card settle-card" style="background:var(--paper);padding:1rem;cursor:pointer" data-member-id="${m.id}">
           <p style="font-family:var(--f-kr);font-weight:500">${escapeHtml(m.name)}
             <span class="settle-badge">${m.settled ? '<span class="badge badge-locked" style="margin-left:0.4rem">입금완료</span>' : ''}</span></p>
           <p class="muted" style="font-size:12px">내야 할 금액 ${m.due.toLocaleString()}원 · 실제 지출 ${m.paid.toLocaleString()}원</p>
           <p class="mono" style="font-family:var(--f-display);font-weight:700;color:var(--${m.net >= 0 ? 'receive' : 'pay'})">${m.net >= 0 ? '+' : ''}${m.net.toLocaleString()}원</p>
-          ${m.account ? `<p class="muted" style="font-size:12px">계좌 ${escapeHtml(m.account)}</p>` : ''}
+          <p class="muted settle-account" style="font-size:12px${m.account ? '' : ';display:none'}">${m.account ? '계좌 ' + escapeHtml(m.account) : ''}</p>
           ${isAdmin ? `<button type="button" class="btn btn-secondary settle-toggle" data-id="${m.id}" data-settled="${m.settled}" style="margin-top:0.4rem">${m.settled ? '입금완료 해제' : '입금완료 표시'}</button>` : ''}
         </div>`).join('')}
     </div>`;
