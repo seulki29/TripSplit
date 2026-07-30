@@ -7,6 +7,8 @@ const CATEGORY_COLORS = {
   식비: '#2d7aaa',
   장보기: '#c4874a',
   교통비: '#8a3a1a',
+  놀이: '#1a5c3a',
+  기타: '#6a5a8a',
 };
 
 async function renderReportInto(container, slug) {

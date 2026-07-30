@@ -1,7 +1,7 @@
 const { CATEGORIES } = require('./categories');
 
 const PROMPT = `이 영수증 이미지를 분석해서 아래 JSON 형식으로만 답해줘. 다른 설명은 절대 추가하지 마.
-{"category": "숙박" | "식비" | "장보기" | "교통비" 중 하나, "date": "YYYY-MM-DD", "amount": 숫자(원 단위, 콤마 없이), "merchant": "상호명", "detail": "구매 품목 요약"}
+{"category": "숙박" | "식비" | "장보기" | "교통비" | "놀이" | "기타" 중 하나, "date": "YYYY-MM-DD", "amount": 숫자(원 단위, 콤마 없이), "merchant": "상호명", "detail": "구매 품목 요약"}
 영수증에서 확인할 수 없는 값은 빈 문자열이나 0으로 둬.`;
 
 // Gemini can hang far past the point a user is willing to wait, and plain

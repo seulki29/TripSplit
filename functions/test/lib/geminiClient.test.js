@@ -26,7 +26,7 @@ describe('classifyReceiptImage', () => {
 
   test('coerces an unrecognized category to an empty string', async () => {
     const body = geminiTextResponse(JSON.stringify({
-      category: '기타', date: '2026-08-01', amount: 1000, merchant: 'x', detail: 'y',
+      category: '해외여행', date: '2026-08-01', amount: 1000, merchant: 'x', detail: 'y',
     }));
     const result = await classifyReceiptImage('base64data', 'image/jpeg', 'key', fakeFetch(body));
     expect(result.category).toBe('');

@@ -48,7 +48,7 @@ describe('expenses', () => {
     const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
 
     await expect(addExpense(db, {
-      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '기타', amount: 1000,
+      sessionToken: token, tripId: 't1', date: '2026-08-01', category: '해외여행', amount: 1000,
     })).rejects.toThrow('INVALID_CATEGORY');
   });
 

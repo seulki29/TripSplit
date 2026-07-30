@@ -3,7 +3,7 @@ import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 } from '../ui.js';
 import { renderReportInto } from './report.js';
 
-const CATEGORIES = ['숙박', '식비', '장보기', '교통비'];
+const CATEGORIES = ['숙박', '식비', '장보기', '교통비', '놀이', '기타'];
 let currentTab = 'expenses';
 let renderToken = 0;
 
