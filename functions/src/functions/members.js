@@ -79,6 +79,21 @@ async function setMemberSettled(db, data) {
   return { ok: true };
 }
 
+async function setMyAccount(db, data) {
+  const { tripId, account } = data;
+  // member-only: an admin has no own settlement card. requireSession with
+  // ['member'] rejects admin/superadmin with FORBIDDEN.
+  const session = await requireSession(db, data.sessionToken, ['member'], tripId);
+
+  const memberRef = db.collection('trips').doc(tripId).collection('members').doc(session.memberId);
+  const snap = await memberRef.get();
+  if (!snap.exists) throw new Error('MEMBER_NOT_FOUND');
+
+  const trimmed = typeof account === 'string' ? account.trim() : '';
+  await memberRef.update({ account: trimmed || null });
+  return { ok: true };
+}
+
 module.exports = {
-  addMember, updateMember, listMembers, setMemberSettled,
+  addMember, updateMember, listMembers, setMemberSettled, setMyAccount,
 };

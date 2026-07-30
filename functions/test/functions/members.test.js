@@ -1,7 +1,7 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { createSession } = require('../../src/lib/sessions');
 const {
-  addMember, updateMember, listMembers, setMemberSettled,
+  addMember, updateMember, listMembers, setMemberSettled, setMyAccount,
 } = require('../../src/functions/members');
 
 describe('members', () => {
@@ -304,5 +304,35 @@ describe('setMemberSettled', () => {
     await expect(setMemberSettled(db, {
       sessionToken: memberToken, tripId: 't1', memberId, settled: true,
     })).rejects.toThrow();
+  });
+
+  test('setMyAccount updates only the caller\'s own member account', async () => {
+    const db = new FakeFirestore();
+    const { token: adminTok } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: adminTok, tripId: 't1', name: '슬기' });
+    const { token: memberTok } = await createSession(db, { role: 'member', tripId: 't1', memberId });
+
+    const res = await setMyAccount(db, { sessionToken: memberTok, tripId: 't1', account: '  우리 1002-33  ' });
+    expect(res).toEqual({ ok: true });
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data().account).toBe('우리 1002-33'); // trimmed
+  });
+
+  test('setMyAccount stores an empty account as null', async () => {
+    const db = new FakeFirestore();
+    const { token: adminTok } = await createSession(db, { role: 'admin', tripId: 't1' });
+    const { memberId } = await addMember(db, { sessionToken: adminTok, tripId: 't1', name: '슬기', account: 'x' });
+    const { token: memberTok } = await createSession(db, { role: 'member', tripId: 't1', memberId });
+
+    await setMyAccount(db, { sessionToken: memberTok, tripId: 't1', account: '   ' });
+    const snap = await db.collection('trips').doc('t1').collection('members').doc(memberId).get();
+    expect(snap.data().account).toBeNull();
+  });
+
+  test('setMyAccount rejects an admin session (no own card)', async () => {
+    const db = new FakeFirestore();
+    const { token: adminTok } = await createSession(db, { role: 'admin', tripId: 't1' });
+    await expect(setMyAccount(db, { sessionToken: adminTok, tripId: 't1', account: 'x' }))
+      .rejects.toThrow('FORBIDDEN');
   });
 });

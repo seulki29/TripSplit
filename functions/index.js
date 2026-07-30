@@ -72,6 +72,7 @@ exports.addMember = onCall(wrap(members.addMember));
 exports.updateMember = onCall(wrap(members.updateMember));
 exports.listMembers = onCall(wrap(members.listMembers));
 exports.setMemberSettled = onCall(wrap(members.setMemberSettled));
+exports.setMyAccount = onCall(wrap(members.setMyAccount));
 
 exports.listExpenses = onCall(wrap(expenses.listExpenses));
 exports.addExpense = onCall(wrap(expenses.addExpense));
