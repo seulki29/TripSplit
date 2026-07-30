@@ -1,7 +1,6 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
-const { makeFakeBucket } = require('../helpers/fakeBucket');
 const { createSession } = require('../../src/lib/sessions');
-const { getReportData, perPersonCategoryAverage, listReceiptUrls } = require('../../src/functions/report');
+const { getReportData, perPersonCategoryAverage } = require('../../src/functions/report');
 const { computeSettlement } = require('../../src/lib/settlement');
 
 async function seedTrip(db, { id, group, status, members, expenses }) {
@@ -247,35 +246,5 @@ describe('getReportData', () => {
 
     expect(settlement.perMember.reduce((s, m) => s + m.due, 0)).toBe(settlement.totalConfirmed);
     expect(settlement.perMember.reduce((s, m) => s + m.net, 0)).toBe(0);
-  });
-});
-
-describe('listReceiptUrls', () => {
-  async function seed() {
-    const db = new FakeFirestore();
-    const bucket = makeFakeBucket();
-    const tripId = 'current';
-    await seedTrip(db, {
-      id: tripId, group: 'SFA', status: 'active', members: [{ id: 'a', name: 'A', weight: 1 }], expenses: [],
-    });
-    const { token: memberToken } = await createSession(db, { role: 'member', tripId, memberId: 'a' });
-    return {
-      db, bucket, memberToken, tripId,
-    };
-  }
-
-  test('returns signed URLs for confirmed expenses with a photo', async () => {
-    const { db, bucket, memberToken, tripId } = await seed();
-    await db.collection('trips').doc(tripId).collection('expenses').doc('e1').set({ confirmed: true, photoPath: 'receipts/t/a.jpg' });
-    await db.collection('trips').doc(tripId).collection('expenses').doc('e2').set({ confirmed: false, photoPath: 'receipts/t/b.jpg' });
-    await db.collection('trips').doc(tripId).collection('expenses').doc('e3').set({ confirmed: true, photoPath: null });
-    const { urls } = await listReceiptUrls(db, bucket, { sessionToken: memberToken, tripId });
-    expect(urls.map((u) => u.expenseId)).toEqual(['e1']);
-    expect(urls[0].url).toMatch(/^https:\/\/storage\.fake\/receipts\/t\/a\.jpg/);
-  });
-
-  test('rejects an unauthenticated session', async () => {
-    const { db, bucket, tripId } = await seed();
-    await expect(listReceiptUrls(db, bucket, { sessionToken: 'bogus', tripId })).rejects.toThrow('UNAUTHENTICATED');
   });
 });

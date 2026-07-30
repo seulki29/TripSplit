@@ -98,4 +98,3 @@ exports.listTripPhotos = onCall(wrapWithBucket(tripPhotos.listTripPhotos));
 exports.deleteTripPhoto = onCall(wrapWithBucket(tripPhotos.deleteTripPhoto));
 
 exports.getReportData = onCall(wrap(report.getReportData));
-exports.listReceiptUrls = onCall(wrapWithBucket(report.listReceiptUrls));

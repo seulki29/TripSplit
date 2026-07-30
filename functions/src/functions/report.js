@@ -1,6 +1,5 @@
 const { requireSession } = require('../lib/sessions');
 const { computeSettlement, allocateInteger } = require('../lib/settlement');
-const { getReceiptReadUrl } = require('../lib/storage');
 
 async function loadTripBundle(db, tripId) {
   const membersSnap = await db.collection('trips').doc(tripId).collection('members').get();
@@ -92,20 +91,4 @@ async function getReportData(db, data) {
   };
 }
 
-async function listReceiptUrls(db, bucket, data) {
-  const { sessionToken, tripId } = data;
-  await requireSession(db, sessionToken, ['admin', 'member'], tripId);
-
-  const snap = await db.collection('trips').doc(tripId).collection('expenses').get();
-  const withPhotos = snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((e) => e.confirmed && e.photoPath);
-
-  const urls = await Promise.all(withPhotos.map(async (e) => ({
-    expenseId: e.id,
-    url: await getReceiptReadUrl(bucket, e.photoPath),
-  })));
-  return { urls };
-}
-
-module.exports = { getReportData, perPersonCategoryAverage, listReceiptUrls };
+module.exports = { getReportData, perPersonCategoryAverage };
