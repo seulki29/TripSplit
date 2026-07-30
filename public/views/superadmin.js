@@ -84,13 +84,23 @@ async function loadTrips(root) {
             <td class="mono">${escapeHtml(t.slug)}</td>
             <td>${escapeHtml(t.group)}</td>
             <td>${escapeHtml(t.status)}</td>
-            <td><button type="button" class="btn btn-secondary sa-reissue" data-trip-id="${t.id}">PIN 재발급</button></td>
+            <td style="white-space:nowrap">
+              <button type="button" class="btn btn-secondary sa-reissue" data-trip-id="${t.id}">PIN 재발급</button>
+              <button type="button" class="btn btn-danger sa-delete" data-trip-id="${t.id}">삭제</button>
+            </td>
           </tr>`).join('')}
       </tbody>
     </table>`;
 
   listEl.querySelectorAll('.sa-reissue').forEach((btn) => {
     btn.addEventListener('click', () => openReissueModal(root, btn.dataset.tripId));
+  });
+
+  listEl.querySelectorAll('.sa-delete').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const trip = trips.find((t) => t.id === btn.dataset.tripId);
+      openDeleteTripModal(root, btn.dataset.tripId, trip?.name || '');
+    });
   });
 }
 
@@ -177,6 +187,33 @@ function openReissueModal(root, tripId) {
     document.getElementById(id).addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('ri-submit').click();
     });
+  });
+}
+
+function openDeleteTripModal(root, tripId, tripName) {
+  openModal('여행 삭제', `
+    <p>정말 <strong>${escapeHtml(tripName)}</strong> 여행을 삭제하시겠습니까?</p>
+    <p class="muted" style="font-size:13px;margin-top:0.5rem">모든 경비, 구성원, 사진 데이터가 영구적으로 삭제되며 되돌릴 수 없습니다.</p>
+    <button type="button" class="btn btn-danger btn-block" id="dt-confirm" style="margin-top:1rem">삭제</button>
+    <p class="muted" id="dt-error" style="margin-top:0.5rem;font-size:13px"></p>
+  `);
+
+  document.getElementById('dt-confirm').addEventListener('click', async () => {
+    const btn = document.getElementById('dt-confirm');
+    btn.disabled = true; btn.textContent = '삭제 중...';
+    try {
+      await callFunction('archiveTrip', { tripId });
+      closeModal();
+      showToast('여행이 삭제되었습니다', 'success');
+      try {
+        await loadTrips(root);
+      } catch (err) {
+        showToast(`목록을 새로고침하지 못했습니다: ${err.message}`, 'error');
+      }
+    } catch (err) {
+      btn.disabled = false; btn.textContent = '삭제';
+      document.getElementById('dt-error').textContent = err.message;
+    }
   });
 }
 
