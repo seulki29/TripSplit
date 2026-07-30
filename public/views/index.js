@@ -37,9 +37,9 @@ async function loadTrips(root) {
     <a href="/t/${encodeURIComponent(t.slug)}" class="card" style="display:block;margin-bottom:0.8rem;text-decoration:none;color:inherit">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem">
         <strong>${escapeHtml(t.name)}</strong>
-        ${STATUS_BADGE[t.status] || ''}
+        ${Object.hasOwn(STATUS_BADGE, t.status) ? STATUS_BADGE[t.status] : ''}
       </div>
-      <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml(t.period?.start || '')} — ${escapeHtml(t.period?.end || '')} · ${escapeHtml(t.location || '')}</p>
+      <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml([[t.period?.start, t.period?.end].filter(Boolean).join(' — '), t.location].filter(Boolean).join(' · '))}</p>
       <span class="tag" style="margin-top:0.5rem;display:inline-block">${escapeHtml(t.group)}</span>
     </a>`).join('');
 }

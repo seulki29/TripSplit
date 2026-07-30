@@ -193,7 +193,7 @@ function openReissueModal(root, tripId) {
 function openDeleteTripModal(root, tripId, tripName) {
   openModal('여행 삭제', `
     <p>정말 <strong>${escapeHtml(tripName)}</strong> 여행을 삭제하시겠습니까?</p>
-    <p class="muted" style="font-size:13px;margin-top:0.5rem">모든 경비, 구성원, 사진 데이터가 영구적으로 삭제되며 되돌릴 수 없습니다.</p>
+    <p class="muted" style="font-size:13px;margin-top:0.5rem">모든 경비, 구성원 데이터가 영구적으로 삭제되며 되돌릴 수 없습니다.</p>
     <button type="button" class="btn btn-danger btn-block" id="dt-confirm" style="margin-top:1rem">삭제</button>
     <p class="muted" id="dt-error" style="margin-top:0.5rem;font-size:13px"></p>
   `);
