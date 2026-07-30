@@ -20,6 +20,19 @@ async function uploadReceiptImage(bucket, tripId, base64, mimeType) {
   return filePath;
 }
 
+/**
+ * Same shape as uploadReceiptImage but under a separate tripPhotos/ prefix —
+ * trip photos are a distinct feature from expense receipts and must never
+ * mix in the same Storage folder.
+ */
+async function uploadTripPhotoImage(bucket, tripId, base64, mimeType) {
+  const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+  const filePath = `tripPhotos/${tripId}/${crypto.randomBytes(16).toString('hex')}.${ext}`;
+  const file = bucket.file(filePath);
+  await file.save(base64ToBuffer(base64), { metadata: { contentType: mimeType } });
+  return filePath;
+}
+
 async function getReceiptReadUrl(bucket, path) {
   // The Storage emulator has no signing credentials, so getSignedUrl hangs
   // trying to reach a metadata server. Serve the emulator's JSON-API
@@ -33,4 +46,6 @@ async function getReceiptReadUrl(bucket, path) {
   return url;
 }
 
-module.exports = { uploadReceiptImage, getReceiptReadUrl, base64ToBuffer, READ_URL_TTL_MS };
+module.exports = {
+  uploadReceiptImage, uploadTripPhotoImage, getReceiptReadUrl, base64ToBuffer, READ_URL_TTL_MS,
+};

@@ -1,5 +1,5 @@
 const { makeFakeBucket } = require('../helpers/fakeBucket');
-const { uploadReceiptImage, getReceiptReadUrl, READ_URL_TTL_MS } = require('../../src/lib/storage');
+const { uploadReceiptImage, uploadTripPhotoImage, getReceiptReadUrl, READ_URL_TTL_MS } = require('../../src/lib/storage');
 
 describe('uploadReceiptImage', () => {
   test('saves the image under the trip and returns the object path', async () => {
@@ -60,5 +60,22 @@ describe('getReceiptReadUrl', () => {
       delete process.env.FIREBASE_STORAGE_EMULATOR_HOST;
       delete process.env.STORAGE_EMULATOR_HOST;
     }
+  });
+});
+
+describe('uploadTripPhotoImage', () => {
+  test('saves the image under tripPhotos/{tripId} and returns the object path', async () => {
+    const bucket = makeFakeBucket();
+    const path = await uploadTripPhotoImage(bucket, 'trip1', Buffer.from('fake-image').toString('base64'), 'image/jpeg');
+
+    expect(path).toMatch(/^tripPhotos\/trip1\/[0-9a-f]{32}\.jpg$/);
+    expect(bucket.saved).toHaveLength(1);
+    expect(bucket.saved[0].opts.metadata.contentType).toBe('image/jpeg');
+  });
+
+  test('uses a .png extension for png images', async () => {
+    const bucket = makeFakeBucket();
+    const path = await uploadTripPhotoImage(bucket, 'trip1', Buffer.from('x').toString('base64'), 'image/png');
+    expect(path).toMatch(/\.png$/);
   });
 });
