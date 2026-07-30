@@ -1,6 +1,6 @@
 import { callFunction, logout } from '../api.js';
 import { getSession } from '../session.js';
-import { openModal, closeModal, showToast, renderChipGroup, escapeHtml } from '../ui.js';
+import { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 } from '../ui.js';
 import { renderReportInto } from './report.js';
 
 const CATEGORIES = ['숙박', '식비', '장보기', '교통비'];
@@ -514,15 +514,6 @@ function openAdminExpenseEditModal(body, slug, exp) {
       btn.disabled = false; btn.textContent = '저장';
       document.getElementById('ee-error').textContent = err.message;
     }
-  });
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
   });
 }
 

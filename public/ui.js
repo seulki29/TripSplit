@@ -22,7 +22,7 @@ function getModalRoot() {
   return overlay;
 }
 
-function openModal(titleHTML, bodyHTML) {
+function openModal(titleHTML, bodyHTML, { onKeydown } = {}) {
   const overlay = getModalRoot();
   const box = overlay.querySelector('.modal-box');
   overlay.querySelector('.modal-title').textContent = titleHTML;
@@ -32,7 +32,10 @@ function openModal(titleHTML, bodyHTML) {
 
   if (escHandler) document.removeEventListener('keydown', escHandler);
   lastFocused = document.activeElement;
-  escHandler = (e) => { if (e.key === 'Escape') closeModal(); };
+  escHandler = (e) => {
+    if (e.key === 'Escape') { closeModal(); return; }
+    if (onKeydown) onKeydown(e);
+  };
   document.addEventListener('keydown', escHandler);
 
   const first = overlay.querySelector('.modal-body input, .modal-body select, .modal-body textarea, .modal-body button');
@@ -77,4 +80,13 @@ function escapeHtml(str) {
   }[c]));
 }
 
-export { openModal, closeModal, showToast, renderChipGroup, escapeHtml };
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 };

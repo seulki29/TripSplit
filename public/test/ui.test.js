@@ -6,8 +6,9 @@ const dom = new JSDOM('<!DOCTYPE html><body></body>', { pretendToBeVisual: true 
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+globalThis.FileReader = dom.window.FileReader;
 
-const { openModal, closeModal, showToast, renderChipGroup, escapeHtml } = await import('../ui.js');
+const { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 } = await import('../ui.js');
 
 describe('ui.js', () => {
   beforeEach(() => {
@@ -118,5 +119,37 @@ describe('ui.js', () => {
   test('escapeHtml neutralizes HTML-significant characters', () => {
     assert.equal(escapeHtml('<img src=x onerror=alert(1)>'), '&lt;img src=x onerror=alert(1)&gt;');
     assert.equal(escapeHtml(`"quoted" & 'single'`), '&quot;quoted&quot; &amp; &#39;single&#39;');
+  });
+
+  test('openModal invokes onKeydown for non-Escape keys while open', () => {
+    let received = null;
+    openModal('제목', '내용', { onKeydown: (e) => { received = e.key; } });
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    assert.equal(received, 'ArrowRight');
+    closeModal();
+  });
+
+  test('onKeydown does not fire for Escape (Escape still closes the modal)', () => {
+    let calls = 0;
+    openModal('제목', '내용', { onKeydown: () => { calls += 1; } });
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+    assert.equal(calls, 0);
+    assert.equal(document.getElementById('modal-overlay').classList.contains('open'), false);
+  });
+
+  test('a new openModal call replaces the previous onKeydown handler', () => {
+    let calls = 0;
+    openModal('제목', '내용', { onKeydown: () => { calls += 1; } });
+    openModal('제목2', '내용2');
+    document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    assert.equal(calls, 0);
+    closeModal();
+  });
+
+  test('fileToBase64 resolves with the base64 payload (no data-URL prefix)', async () => {
+    const file = new dom.window.File([new dom.window.Blob(['hi'])], 'x.jpg', { type: 'image/jpeg' });
+    const result = await fileToBase64(file);
+    assert.equal(typeof result, 'string');
+    assert.ok(!result.startsWith('data:'));
   });
 });
