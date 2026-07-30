@@ -64,7 +64,7 @@ async function updateMember(db, data) {
 }
 
 async function listMembers(db, data) {
-  await requireSession(db, data.sessionToken, ['admin'], data.tripId);
+  await requireSession(db, data.sessionToken, ['admin', 'member'], data.tripId);
   const membersRef = db.collection('trips').doc(data.tripId).collection('members');
   const snap = await membersRef.get();
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
