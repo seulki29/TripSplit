@@ -213,7 +213,11 @@ function mount(root, { slug }) {
   const session = getSession();
   if (!session || session.tripSlug !== slug) { location.href = `/t/${slug}`; return; }
   const backHref = session.role === 'admin' ? `/t/${slug}/admin` : `/t/${slug}`;
-  root.innerHTML = `<div class="container" style="padding-top:2rem"><p class="center"><a href="${backHref}">← 돌아가기</a></p><div id="report-body"></div></div>`;
+  root.innerHTML = `<div class="container" style="padding-top:2rem">
+      <p class="label"><a href="/" style="text-decoration:none;color:inherit">← TripSplit</a></p>
+      <p class="center"><a href="${backHref}">← 돌아가기</a></p>
+      <div id="report-body"></div>
+    </div>`;
   renderReportInto(document.getElementById('report-body'), slug);
 }
 

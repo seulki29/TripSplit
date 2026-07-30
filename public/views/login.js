@@ -14,6 +14,7 @@ function render(root, slug) {
 
   root.innerHTML = `
     <div class="container" style="max-width:360px;padding-top:4rem">
+      <p class="label"><a href="/" style="text-decoration:none;color:inherit">← TripSplit</a></p>
       <h2>여행 로그인</h2>
       <div class="tabs">
         <button type="button" class="tab ${currentTab === 'admin' ? 'active' : ''}" data-tab="admin">관리자로 입장</button>

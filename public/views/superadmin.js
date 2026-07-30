@@ -14,6 +14,7 @@ function mount(root) {
 function renderLogin(root) {
   root.innerHTML = `
     <div class="container" style="max-width:360px;padding-top:4rem">
+      <p class="label"><a href="/" style="text-decoration:none;color:inherit">← TripSplit</a></p>
       <h2>Superadmin</h2>
       <div class="field">
         <label class="label">Password</label>
@@ -45,6 +46,7 @@ function renderLogin(root) {
 async function renderDashboard(root) {
   root.innerHTML = `
     <div class="container" style="padding-top:2rem">
+      <p class="label"><a href="/" style="text-decoration:none;color:inherit">← TripSplit</a></p>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <h2>여행 목록</h2>
         <div>

@@ -20,6 +20,7 @@ function render(root, slug) {
   const myToken = ++renderToken;
   root.innerHTML = `
     <div class="container" style="padding-top:2rem">
+      <p class="label"><a href="/" style="text-decoration:none;color:inherit">← TripSplit</a></p>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <h2>내 여행</h2>
         <button type="button" class="btn btn-secondary" id="member-logout">로그아웃</button>
