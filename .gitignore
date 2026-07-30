@@ -22,6 +22,9 @@ Thumbs.db
 .vercel
 .env*
 
+# Subagent-driven-development scratch workspace (ledgers, briefs, reports)
+.superpowers/
+
 # Transient superadmin password-hash files from scripts/hash-password.js
 functions/newhash.txt
 functions/checkhash.txt
