@@ -25,6 +25,7 @@ const tripSetup = require('./src/functions/tripSetup');
 const members = require('./src/functions/members');
 const expenses = require('./src/functions/expenses');
 const receipts = require('./src/functions/receipts');
+const tripPhotos = require('./src/functions/tripPhotos');
 const report = require('./src/functions/report');
 
 function wrap(handler) {
@@ -91,6 +92,10 @@ exports.classifyReceipt = onCall({ secrets: [geminiApiKey] }, async (request) =>
 });
 
 exports.getReceiptUrl = onCall(wrapWithBucket(receipts.getReceiptUrl));
+
+exports.addTripPhoto = onCall(wrapWithBucket(tripPhotos.addTripPhoto));
+exports.listTripPhotos = onCall(wrapWithBucket(tripPhotos.listTripPhotos));
+exports.deleteTripPhoto = onCall(wrapWithBucket(tripPhotos.deleteTripPhoto));
 
 exports.getReportData = onCall(wrap(report.getReportData));
 exports.listReceiptUrls = onCall(wrapWithBucket(report.listReceiptUrls));

@@ -20,6 +20,7 @@ const MESSAGES = {
   MEMBER_NOT_FOUND: '구성원을 찾을 수 없습니다.',
   EXPENSE_NOT_FOUND: '경비 항목을 찾을 수 없습니다.',
   TRIP_NOT_FOUND: '여행을 찾을 수 없습니다.',
+  PHOTO_NOT_FOUND: '사진을 찾을 수 없습니다.',
   NO_PHOTO: '첨부된 영수증이 없습니다.',
   EXPENSE_LOCKED: '확정된 항목은 수정할 수 없습니다.',
   TRIP_COMPLETED: '완료된 여행이라 수정할 수 없습니다. 여행 완료를 해제한 뒤 다시 시도해주세요.',
