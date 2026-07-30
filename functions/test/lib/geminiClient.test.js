@@ -62,4 +62,42 @@ describe('classifyReceiptImage', () => {
     expect(result.merchant).toBe('');
     expect(result.detail).toBe('');
   });
+
+  test('aborts and throws GEMINI_TIMEOUT when Gemini never responds', async () => {
+    jest.useFakeTimers();
+    try {
+      const hangingFetch = jest.fn((url, opts) => new Promise((resolve, reject) => {
+        opts.signal.addEventListener('abort', () => {
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }));
+
+      const promise = classifyReceiptImage('base64data', 'image/jpeg', 'key', hangingFetch);
+      const assertion = expect(promise).rejects.toThrow('GEMINI_TIMEOUT');
+      await jest.advanceTimersByTimeAsync(30000);
+      await assertion;
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('passes an abort signal to fetch and clears the timeout on a normal response', async () => {
+    jest.useFakeTimers();
+    try {
+      const body = geminiTextResponse(JSON.stringify({
+        category: '식비', date: '2026-08-01', amount: 1000, merchant: 'x', detail: 'y',
+      }));
+      const fetchImpl = fakeFetch(body);
+      const result = await classifyReceiptImage('base64data', 'image/jpeg', 'key', fetchImpl);
+
+      expect(result.merchant).toBe('x');
+      const [, opts] = fetchImpl.mock.calls[0];
+      expect(opts.signal).toBeInstanceOf(AbortSignal);
+      expect(opts.signal.aborted).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
