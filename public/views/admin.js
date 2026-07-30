@@ -65,38 +65,63 @@ async function renderSetupTab(body, slug, myToken) {
   }
   if (myToken !== renderToken) return;
 
+  const isCompleted = trip.status === 'completed';
   body.innerHTML = `
-    <div class="field"><label class="label">기간 시작</label><input type="date" class="input" id="setup-start" value="${escapeHtml(trip.period?.start || '')}"></div>
-    <div class="field"><label class="label">기간 종료</label><input type="date" class="input" id="setup-end" value="${escapeHtml(trip.period?.end || '')}"></div>
-    <div class="field"><label class="label">장소</label><input class="input" id="setup-location" value="${escapeHtml(trip.location || '')}"></div>
-    <div class="field"><label class="label">숙박지</label><input class="input" id="setup-lodging" value="${escapeHtml(trip.lodging || '')}"></div>
-    <button type="button" class="btn btn-primary" id="setup-save">저장</button>`;
+    <div class="card" style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem">
+      <div>상태: ${isCompleted
+        ? '<span class="badge badge-locked">완료됨 (편집 잠김)</span>'
+        : '<span class="badge">진행 중</span>'}</div>
+      <button type="button" class="btn ${isCompleted ? 'btn-secondary' : 'btn-primary'}" id="trip-status-toggle">${isCompleted ? '여행 완료 해제' : '여행 완료 처리'}</button>
+    </div>
+    <div class="field"><label class="label">기간 시작</label><input type="date" class="input" id="setup-start" value="${escapeHtml(trip.period?.start || '')}" ${isCompleted ? 'disabled' : ''}></div>
+    <div class="field"><label class="label">기간 종료</label><input type="date" class="input" id="setup-end" value="${escapeHtml(trip.period?.end || '')}" ${isCompleted ? 'disabled' : ''}></div>
+    <div class="field"><label class="label">장소</label><input class="input" id="setup-location" value="${escapeHtml(trip.location || '')}" ${isCompleted ? 'disabled' : ''}></div>
+    <div class="field"><label class="label">숙박지</label><input class="input" id="setup-lodging" value="${escapeHtml(trip.lodging || '')}" ${isCompleted ? 'disabled' : ''}></div>
+    ${isCompleted ? '<p class="muted" style="font-size:13px">완료된 여행입니다. 편집하려면 완료를 해제하세요.</p>' : '<button type="button" class="btn btn-primary" id="setup-save">저장</button>'}`;
 
-  document.getElementById('setup-save').addEventListener('click', async () => {
-    const btn = document.getElementById('setup-save');
-    btn.disabled = true; btn.textContent = '저장 중...';
+  document.getElementById('trip-status-toggle').addEventListener('click', async () => {
+    const tbtn = document.getElementById('trip-status-toggle');
+    tbtn.disabled = true;
     try {
-      await callFunction('updateTripSetup', {
-        tripId: session.tripId,
-        patch: {
-          period: { start: document.getElementById('setup-start').value, end: document.getElementById('setup-end').value },
-          location: document.getElementById('setup-location').value,
-          lodging: document.getElementById('setup-lodging').value,
-        },
-      });
-      showToast('저장되었습니다', 'success');
-      btn.disabled = false; btn.textContent = '저장';
+      await callFunction('setTripStatus', { tripId: session.tripId, status: isCompleted ? 'active' : 'completed' });
+      renderSetupTab(body, slug, renderToken);
     } catch (err) {
-      btn.disabled = false; btn.textContent = '저장';
+      tbtn.disabled = false;
       showToast(err.message, 'error');
     }
   });
+
+  const saveBtn = document.getElementById('setup-save');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true; saveBtn.textContent = '저장 중...';
+      try {
+        await callFunction('updateTripSetup', {
+          tripId: session.tripId,
+          patch: {
+            period: { start: document.getElementById('setup-start').value, end: document.getElementById('setup-end').value },
+            location: document.getElementById('setup-location').value,
+            lodging: document.getElementById('setup-lodging').value,
+          },
+        });
+        showToast('저장되었습니다', 'success');
+        saveBtn.disabled = false; saveBtn.textContent = '저장';
+      } catch (err) {
+        saveBtn.disabled = false; saveBtn.textContent = '저장';
+        showToast(err.message, 'error');
+      }
+    });
+  }
 }
 
 async function renderMembersTab(body, slug, myToken) {
   const session = getSession();
+  let trip;
   try {
-    membersCache = await callFunction('listMembers', { tripId: session.tripId });
+    [membersCache, trip] = await Promise.all([
+      callFunction('listMembers', { tripId: session.tripId }),
+      callFunction('getTripSetup', { tripId: session.tripId }),
+    ]);
   } catch (err) {
     if (myToken !== renderToken) return;
     body.innerHTML = `<p class="muted">불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="tab-retry">다시 시도</button>`;
@@ -105,27 +130,32 @@ async function renderMembersTab(body, slug, myToken) {
   }
   if (myToken !== renderToken) return;
 
+  const locked = trip.status === 'completed';
   body.innerHTML = `
-    <button type="button" class="btn btn-primary" id="members-add" style="margin-bottom:1rem">구성원 추가</button>
+    ${locked
+      ? '<div class="card" style="margin-bottom:1rem;background:var(--rule)"><strong>완료된 여행</strong> — 구성원 편집이 잠겨 있습니다.</div>'
+      : '<button type="button" class="btn btn-primary" id="members-add" style="margin-bottom:1rem">구성원 추가</button>'}
     <div id="members-list"></div>`;
 
-  document.getElementById('members-add').addEventListener('click', () => openMemberModal(body, slug, null));
-  renderMembersList(body, slug);
+  if (!locked) document.getElementById('members-add').addEventListener('click', () => openMemberModal(body, slug, null));
+  renderMembersList(body, slug, locked);
 }
 
-function renderMembersList(body, slug) {
+function renderMembersList(body, slug, locked) {
   body.querySelector('#members-list').innerHTML = membersCache.map((m) => `
     <div class="card" style="margin-bottom:0.6rem;display:flex;justify-content:space-between;align-items:center">
       <div>
         <strong>${escapeHtml(m.name)}</strong>
         <span class="muted" style="font-size:12px;margin-left:0.5rem">가중치 ${m.weight}${m.account ? ' · 계좌 ' + escapeHtml(m.account) : ''}</span>
       </div>
-      <button type="button" class="btn btn-secondary member-edit" data-id="${m.id}">수정</button>
+      ${locked ? '' : `<button type="button" class="btn btn-secondary member-edit" data-id="${m.id}">수정</button>`}
     </div>`).join('');
 
-  body.querySelectorAll('.member-edit').forEach((btn) => {
-    btn.addEventListener('click', () => openMemberModal(body, slug, membersCache.find((m) => m.id === btn.dataset.id)));
-  });
+  if (!locked) {
+    body.querySelectorAll('.member-edit').forEach((btn) => {
+      btn.addEventListener('click', () => openMemberModal(body, slug, membersCache.find((m) => m.id === btn.dataset.id)));
+    });
+  }
 }
 
 function openMemberModal(body, slug, member) {
@@ -174,11 +204,12 @@ function openMemberModal(body, slug, member) {
 
 async function renderExpensesTab(body, slug, myToken) {
   const session = getSession();
-  let expenses, members;
+  let expenses, members, trip;
   try {
-    [expenses, members] = await Promise.all([
+    [expenses, members, trip] = await Promise.all([
       callFunction('listExpenses', { tripId: session.tripId }),
       callFunction('listMembersForLogin', { slug }),
+      callFunction('getTripSetup', { tripId: session.tripId }),
     ]);
   } catch (err) {
     if (myToken !== renderToken) return;
@@ -189,8 +220,10 @@ async function renderExpensesTab(body, slug, myToken) {
   if (myToken !== renderToken) return;
 
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
+  const locked = trip.status === 'completed';
 
   body.innerHTML = `
+    ${locked ? '<div class="card" style="margin-bottom:1rem;background:var(--rule)"><strong>완료된 여행</strong> — 편집이 잠겨 있습니다. 여행정보 탭에서 완료를 해제하세요.</div>' : `
     <div style="margin-bottom:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
       <button type="button" class="btn btn-primary" id="expense-add">경비 입력</button>
       <button type="button" class="btn btn-secondary" id="expense-exclusion-toggle">${exclusionMode ? '제외설정 취소' : '제외설정'}</button>
@@ -199,7 +232,7 @@ async function renderExpensesTab(body, slug, myToken) {
       <div class="card" style="margin-bottom:1rem;display:flex;gap:0.5rem;align-items:center">
         <button type="button" class="btn btn-primary" id="expense-exclusion-apply">제외 구성원 지정</button>
         <button type="button" class="btn btn-secondary" id="expense-exclusion-cancel">취소</button>
-      </div>` : ''}
+      </div>` : ''}`}
     <div id="expenses-list"></div>`;
 
   document.getElementById('expenses-list').innerHTML = expenses.map((e) => `
@@ -213,11 +246,11 @@ async function renderExpensesTab(body, slug, myToken) {
           ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">확정됨</span>' : ''}
           ${e.photoPath ? '<span class="muted" style="font-size:11px;margin-left:0.4rem">📷</span>' : ''}
         </div>
-        <div class="card-actions">
+        ${locked ? '' : `<div class="card-actions">
           <button type="button" class="btn btn-secondary expense-confirm" data-id="${e.id}" data-confirmed="${e.confirmed}">${e.confirmed ? '확정 해제' : '확정'}</button>
           <button type="button" class="btn btn-secondary expense-edit" data-id="${e.id}">수정</button>
           <button type="button" class="btn btn-danger expense-delete" data-id="${e.id}">삭제</button>
-        </div>
+        </div>`}
       </div>
       <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}</p>
       ${e.excludedMembers && e.excludedMembers.length ? `<p class="muted" style="font-size:12px">제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</p>` : ''}
@@ -271,14 +304,16 @@ async function renderExpensesTab(body, slug, myToken) {
       }
     });
   });
-  document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members));
+  if (!locked) {
+    document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members));
 
-  document.getElementById('expense-exclusion-toggle').addEventListener('click', () => {
-    exclusionMode = !exclusionMode;
-    renderExpensesTab(body, slug, myToken);
-  });
+    document.getElementById('expense-exclusion-toggle').addEventListener('click', () => {
+      exclusionMode = !exclusionMode;
+      renderExpensesTab(body, slug, myToken);
+    });
+  }
 
-  if (exclusionMode) {
+  if (exclusionMode && !locked) {
     document.getElementById('expense-exclusion-cancel').addEventListener('click', () => {
       exclusionMode = false;
       renderExpensesTab(body, slug, myToken);

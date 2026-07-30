@@ -22,6 +22,7 @@ const MESSAGES = {
   TRIP_NOT_FOUND: '여행을 찾을 수 없습니다.',
   NO_PHOTO: '첨부된 영수증이 없습니다.',
   EXPENSE_LOCKED: '확정된 항목은 수정할 수 없습니다.',
+  TRIP_COMPLETED: '완료된 여행이라 수정할 수 없습니다. 여행 완료를 해제한 뒤 다시 시도해주세요.',
   ENTERED_BY_REQUIRED: '입력 귀속 대상을 선택해주세요.',
   FORBIDDEN: '권한이 없습니다.',
   INTERNAL_ERROR: '요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.',
