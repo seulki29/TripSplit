@@ -20,6 +20,7 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 const { toHttpsError } = require('./src/lib/httpsErrors');
 const superadmin = require('./src/functions/superadmin');
+const publicTrips = require('./src/functions/publicTrips');
 const tripAuth = require('./src/functions/tripAuth');
 const tripSetup = require('./src/functions/tripSetup');
 const members = require('./src/functions/members');
@@ -60,6 +61,8 @@ exports.createTrip = onCall(wrap(superadmin.createTrip));
 exports.listTrips = onCall(wrap(superadmin.listTrips));
 exports.updateTrip = onCall(wrap(superadmin.updateTrip));
 exports.archiveTrip = onCall(wrap(superadmin.archiveTrip));
+
+exports.listPublicTrips = onCall(wrap(publicTrips.listPublicTrips));
 
 exports.verifyAdminPin = onCall(wrap(tripAuth.verifyAdminPin));
 exports.verifyMemberPin = onCall(wrap(tripAuth.verifyMemberPin));
