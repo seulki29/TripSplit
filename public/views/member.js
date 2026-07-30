@@ -115,6 +115,8 @@ async function loadExpenses(root, slug) {
 function openExpenseModal(root, slug) {
   let category = CATEGORIES[1];
   let photoPath = null;
+  let classifyPromise = null;
+  let skipped = false;
 
   openModal('경비 입력', `
     <div class="field"><label class="label">사진</label><input type="file" accept="image/*" id="me-photo"></div>
@@ -145,26 +147,44 @@ function openExpenseModal(root, slug) {
   document.getElementById('me-photo').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    skipped = false;
     const mimeType = file.type;
-    const photoBase64 = await fileToBase64(file);
-    document.getElementById('me-photo-preview').innerHTML = `<img src="data:${mimeType};base64,${photoBase64}" style="width:100%;border-radius:4px;margin:0.5rem 0">`;
+    const b64 = await fileToBase64(file);
+    document.getElementById('me-photo-preview').innerHTML =
+      `<img src="data:${mimeType};base64,${b64}" style="width:100%;border-radius:4px;margin:0.5rem 0">`
+      + `<div id="me-classify-status" class="muted" style="font-size:13px;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">🔍 문자 추출 중…<button type="button" class="btn btn-secondary" id="me-classify-skip">건너뛰고 직접 입력</button></div>`;
 
-    try {
-      const session = getSession();
-      const classification = await callFunction('classifyReceipt', { tripId: session.tripId, photoBase64, mimeType });
-      photoPath = classification.photoPath;
-      if (classification.classified === false) {
-        showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
-      } else {
-        if (classification.category) { category = classification.category; rerenderCategoryChips(); }
-        if (classification.date) document.getElementById('me-date').value = classification.date;
-        if (classification.amount) document.getElementById('me-amount').value = classification.amount;
-        if (classification.merchant) document.getElementById('me-merchant').value = classification.merchant;
-        if (classification.detail) document.getElementById('me-detail').value = classification.detail;
-      }
-    } catch (err) {
-      showToast('사진 업로드 실패 — 사진 없이 저장됩니다', 'error');
-    }
+    document.getElementById('me-classify-skip').addEventListener('click', () => {
+      skipped = true;
+      const s = document.getElementById('me-classify-status');
+      if (s) s.remove();
+    });
+
+    const session = getSession();
+    classifyPromise = callFunction('classifyReceipt', { tripId: session.tripId, photoBase64: b64, mimeType })
+      .then((classification) => {
+        photoPath = classification.photoPath || null;
+        const s = document.getElementById('me-classify-status');
+        if (s) s.remove();
+        if (!skipped) {
+          if (classification.classified === false) {
+            showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
+          } else {
+            if (classification.category) { category = classification.category; rerenderCategoryChips(); }
+            if (classification.date) document.getElementById('me-date').value = classification.date;
+            if (classification.amount) document.getElementById('me-amount').value = classification.amount;
+            if (classification.merchant) document.getElementById('me-merchant').value = classification.merchant;
+            if (classification.detail) document.getElementById('me-detail').value = classification.detail;
+          }
+        }
+        return photoPath;
+      })
+      .catch(() => {
+        const s = document.getElementById('me-classify-status');
+        if (s) s.remove();
+        showToast('사진 업로드 실패 — 사진 없이 저장됩니다', 'error');
+        return null;
+      });
   });
 
   document.getElementById('me-submit').addEventListener('click', async () => {
@@ -172,6 +192,11 @@ function openExpenseModal(root, slug) {
     const btn = document.getElementById('me-submit');
     btn.disabled = true; btn.textContent = '저장 중...';
     try {
+      if (classifyPromise) {
+        btn.textContent = '사진 저장 중...';
+        await classifyPromise;
+        btn.textContent = '저장 중...';
+      }
       await callFunction('addExpense', {
         tripId: session.tripId,
         category,
