@@ -1,4 +1,5 @@
 const { requireSession } = require('../lib/sessions');
+const { requireTripEditable } = require('../lib/tripStatus');
 
 async function getTripSetup(db, data) {
   await requireSession(db, data.sessionToken, ['admin', 'member'], data.tripId);
@@ -10,6 +11,7 @@ async function getTripSetup(db, data) {
 
 async function updateTripSetup(db, data) {
   await requireSession(db, data.sessionToken, ['admin'], data.tripId);
+  await requireTripEditable(db, data.tripId);
 
   const ref = db.collection('trips').doc(data.tripId);
   const snap = await ref.get();
@@ -34,4 +36,15 @@ async function updateTripSetup(db, data) {
   return { ok: true };
 }
 
-module.exports = { getTripSetup, updateTripSetup };
+async function setTripStatus(db, data) {
+  await requireSession(db, data.sessionToken, ['admin'], data.tripId);
+  const { tripId, status } = data;
+  if (status !== 'active' && status !== 'completed') throw new Error('INVALID_STATUS');
+  const ref = db.collection('trips').doc(tripId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('TRIP_NOT_FOUND');
+  await ref.update({ status });
+  return { ok: true };
+}
+
+module.exports = { getTripSetup, updateTripSetup, setTripStatus };

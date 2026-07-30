@@ -1,7 +1,9 @@
 const { requireSession } = require('../lib/sessions');
+const { requireTripEditable } = require('../lib/tripStatus');
 
 async function addMember(db, data) {
   await requireSession(db, data.sessionToken, ['admin'], data.tripId);
+  await requireTripEditable(db, data.tripId);
 
   const { tripId, name } = data;
   if (!name || !name.trim()) throw new Error('NAME_REQUIRED');
@@ -27,6 +29,7 @@ async function addMember(db, data) {
 
 async function updateMember(db, data) {
   await requireSession(db, data.sessionToken, ['admin'], data.tripId);
+  await requireTripEditable(db, data.tripId);
 
   const { tripId, memberId } = data;
   const patch = data.patch || {};

@@ -67,6 +67,7 @@ exports.logout = onCall(wrap(tripAuth.logout));
 
 exports.getTripSetup = onCall(wrap(tripSetup.getTripSetup));
 exports.updateTripSetup = onCall(wrap(tripSetup.updateTripSetup));
+exports.setTripStatus = onCall(wrap(tripSetup.setTripStatus));
 
 exports.addMember = onCall(wrap(members.addMember));
 exports.updateMember = onCall(wrap(members.updateMember));

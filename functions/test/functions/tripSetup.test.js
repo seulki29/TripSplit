@@ -1,6 +1,8 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { createSession } = require('../../src/lib/sessions');
-const { getTripSetup, updateTripSetup } = require('../../src/functions/tripSetup');
+const { getTripSetup, updateTripSetup, setTripStatus } = require('../../src/functions/tripSetup');
+const { addMember } = require('../../src/functions/members');
+const { addExpense } = require('../../src/functions/expenses');
 
 async function makeTrip(db, overrides = {}) {
   const ref = await db.collection('trips').add({
@@ -131,5 +133,62 @@ describe('tripSetup', () => {
     await expect(updateTripSetup(db, {
       sessionToken: token, tripId: 'ghost', patch: { location: '영월' },
     })).rejects.toThrow('TRIP_NOT_FOUND');
+  });
+});
+
+describe('setTripStatus + edit-lock', () => {
+  test('setTripStatus requires an admin session', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'active' });
+    const { token } = await createSession(db, { role: 'member', tripId: tripRef.id, memberId: 'm1' });
+    await expect(setTripStatus(db, { sessionToken: token, tripId: tripRef.id, status: 'completed' }))
+      .rejects.toThrow('FORBIDDEN');
+  });
+
+  test('setTripStatus flips active <-> completed', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'active' });
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+
+    await setTripStatus(db, { sessionToken: token, tripId: tripRef.id, status: 'completed' });
+    expect((await db.collection('trips').doc(tripRef.id).get()).data().status).toBe('completed');
+
+    await setTripStatus(db, { sessionToken: token, tripId: tripRef.id, status: 'active' });
+    expect((await db.collection('trips').doc(tripRef.id).get()).data().status).toBe('active');
+  });
+
+  test('setTripStatus rejects an invalid status', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'active' });
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+    await expect(setTripStatus(db, { sessionToken: token, tripId: tripRef.id, status: 'setup' }))
+      .rejects.toThrow('INVALID_STATUS');
+  });
+
+  test('setTripStatus rejects a missing trip', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'admin', tripId: 'ghost' });
+    await expect(setTripStatus(db, { sessionToken: token, tripId: 'ghost', status: 'completed' }))
+      .rejects.toThrow('TRIP_NOT_FOUND');
+  });
+
+  test('a completed trip blocks addExpense and addMember', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'completed' });
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+
+    await expect(addMember(db, { sessionToken: token, tripId: tripRef.id, name: '슬기' }))
+      .rejects.toThrow('TRIP_COMPLETED');
+    await expect(addExpense(db, {
+      sessionToken: token, tripId: tripRef.id, enteredBy: 'm1', category: '식비', amount: 1000,
+    })).rejects.toThrow('TRIP_COMPLETED');
+  });
+
+  test('an active trip allows addMember (guard passes)', async () => {
+    const db = new FakeFirestore();
+    const tripRef = await makeTrip(db, { status: 'active' });
+    const { token } = await createSession(db, { role: 'admin', tripId: tripRef.id });
+    const { memberId } = await addMember(db, { sessionToken: token, tripId: tripRef.id, name: '슬기' });
+    expect(memberId).toBeTruthy();
   });
 });

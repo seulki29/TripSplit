@@ -1,4 +1,5 @@
 const { requireSession } = require('../lib/sessions');
+const { requireTripEditable } = require('../lib/tripStatus');
 const { CATEGORIES } = require('../lib/categories');
 
 const PHOTO_PATH_SUFFIX_RE = /^[0-9a-f]{32}\.(jpg|png)$/;
@@ -36,6 +37,7 @@ async function addExpense(db, data) {
     sessionToken, tripId, date, category, amount, merchant, detail, photoPath,
   } = data;
   const session = await requireSession(db, sessionToken, ['admin', 'member'], tripId);
+  await requireTripEditable(db, tripId);
 
   if (!CATEGORIES.includes(category)) throw new Error('INVALID_CATEGORY');
   if (!(Number(amount) > 0)) throw new Error('INVALID_AMOUNT');
@@ -77,6 +79,7 @@ async function updateExpense(db, data) {
   const { sessionToken, tripId, expenseId } = data;
   const patch = data.patch || {};
   const session = await requireSession(db, sessionToken, ['admin', 'member'], tripId);
+  await requireTripEditable(db, tripId);
 
   const ref = db.collection('trips').doc(tripId).collection('expenses').doc(expenseId);
   const snap = await ref.get();
@@ -119,6 +122,7 @@ async function updateExpense(db, data) {
 async function deleteExpense(db, bucket, data) {
   const { sessionToken, tripId, expenseId } = data;
   const session = await requireSession(db, sessionToken, ['admin', 'member'], tripId);
+  await requireTripEditable(db, tripId);
 
   const ref = db.collection('trips').doc(tripId).collection('expenses').doc(expenseId);
   const snap = await ref.get();
@@ -144,6 +148,7 @@ async function confirmExpense(db, data) {
     sessionToken, tripId, expenseId, confirmed,
   } = data;
   await requireSession(db, sessionToken, ['admin'], tripId);
+  await requireTripEditable(db, tripId);
 
   const ref = db.collection('trips').doc(tripId).collection('expenses').doc(expenseId);
   const snap = await ref.get();
@@ -158,6 +163,7 @@ async function setExpenseExclusions(db, data) {
     sessionToken, tripId, expenseIds, excludedMemberIds,
   } = data;
   await requireSession(db, sessionToken, ['admin'], tripId);
+  await requireTripEditable(db, tripId);
 
   if (!Array.isArray(expenseIds)) throw new Error('EXPENSE_NOT_FOUND');
   await validateMemberIds(db, tripId, excludedMemberIds);
