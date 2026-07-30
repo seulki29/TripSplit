@@ -173,6 +173,49 @@ describe('computeSettlement', () => {
     const totalDue = perMember.reduce((s, m) => s + m.due, 0);
     expect(totalDue).toBe(10000); // 3334 + 3333 + 3333
   });
+
+  test('breakdown lists each included expense with the member\'s share, summing to due', () => {
+    const members = [
+      { id: 'a', name: 'A', weight: 1 },
+      { id: 'b', name: 'B', weight: 1 },
+    ];
+    const expenses = [
+      { id: 'e1', category: '숙박', merchant: '호텔', amount: 120000, enteredBy: 'a', confirmed: true, excludedMembers: [] },
+      { id: 'e2', category: '식비', merchant: '식당', amount: 60000, enteredBy: 'b', confirmed: true, excludedMembers: [] },
+    ];
+
+    const result = computeSettlement(members, expenses);
+    const a = result.perMember.find((m) => m.id === 'a');
+    expect(a.breakdown).toEqual([
+      { expenseId: 'e1', category: '숙박', merchant: '호텔', share: 60000 },
+      { expenseId: 'e2', category: '식비', merchant: '식당', share: 30000 },
+    ]);
+    expect(a.breakdown.reduce((s, b) => s + b.share, 0)).toBe(a.due);
+  });
+
+  test('an expense that excludes a member is absent from that member\'s breakdown', () => {
+    const members = [
+      { id: 'a', name: 'A', weight: 1 },
+      { id: 'b', name: 'B', weight: 1 },
+    ];
+    const expenses = [
+      { id: 'e1', category: '교통비', merchant: '택시', amount: 100000, enteredBy: 'a', confirmed: true, excludedMembers: ['b'] },
+    ];
+
+    const result = computeSettlement(members, expenses);
+    const b = result.perMember.find((m) => m.id === 'b');
+    expect(b.breakdown).toEqual([]);
+    expect(b.due).toBe(0);
+    const a = result.perMember.find((m) => m.id === 'a');
+    expect(a.breakdown).toEqual([{ expenseId: 'e1', category: '교통비', merchant: '택시', share: 100000 }]);
+  });
+
+  test('unconfirmed expenses never appear in a breakdown', () => {
+    const members = [{ id: 'a', name: 'A', weight: 1 }];
+    const expenses = [{ id: 'e1', category: '식비', merchant: '', amount: 100000, enteredBy: 'a', confirmed: false, excludedMembers: [] }];
+    const result = computeSettlement(members, expenses);
+    expect(result.perMember[0].breakdown).toEqual([]);
+  });
 });
 
 describe('allocateInteger', () => {

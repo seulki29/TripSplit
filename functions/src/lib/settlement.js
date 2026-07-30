@@ -33,7 +33,8 @@ function computeSettlement(members, expenses) {
   }
 
   const dueByMember = {};
-  for (const m of members) dueByMember[m.id] = 0;
+  const breakdownByMember = {};
+  for (const m of members) { dueByMember[m.id] = 0; breakdownByMember[m.id] = []; }
 
   for (const e of confirmed) {
     const excluded = new Set(e.excludedMembers || []);
@@ -42,6 +43,12 @@ function computeSettlement(members, expenses) {
     const allocation = allocateInteger(e.amount, weights);
     for (const a of allocation) {
       dueByMember[a.id] += a.amount;
+      breakdownByMember[a.id].push({
+        expenseId: e.id,
+        category: e.category,
+        merchant: e.merchant || '',
+        share: a.amount,
+      });
     }
   }
 
@@ -59,6 +66,7 @@ function computeSettlement(members, expenses) {
     due: dueByMember[m.id] || 0,
     paid: paidByMember[m.id] || 0,
     net: (paidByMember[m.id] || 0) - (dueByMember[m.id] || 0),
+    breakdown: breakdownByMember[m.id] || [],
   }));
 
   return { categoryTotals, totalConfirmed, perMember };
