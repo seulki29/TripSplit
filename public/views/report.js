@@ -1,6 +1,6 @@
 import { callFunction } from '../api.js';
 import { getSession } from '../session.js';
-import { openModal, closeModal, showToast, escapeHtml } from '../ui.js';
+import { openModal, closeModal, showToast, escapeHtml, fileToBase64 } from '../ui.js';
 
 const CATEGORY_COLORS = {
   숙박: '#1a4a6b',
@@ -49,7 +49,11 @@ async function renderReportInto(container, slug) {
       <p class="muted" style="font-size:13px">확정 지출을 제외되지 않은 구성원끼리 가중치 비율로 나눠 각자 '내야 할 금액'을 구하고, 실제 결제액과 비교해 차액(받을 돈/낼 돈)을 계산합니다. 아래 최종 정산에서 구성원 카드를 누르면 계산 내역을 볼 수 있습니다.</p>
     </div>
     <div class="section"><h2>최종 정산</h2>${renderSettlement(settlement.perMember, session.role === 'admin')}</div>
-    <div class="section"><h2>영수증 갤러리</h2><div id="report-gallery"><p class="muted">불러오는 중...</p></div></div>`;
+    <div class="section"><h2>여행사진</h2>
+      <input type="file" accept="image/jpeg,image/png" id="tp-upload" style="display:none">
+      <button type="button" class="btn btn-secondary" id="tp-upload-btn" style="margin-bottom:0.6rem">사진 추가</button>
+      <div id="tp-gallery"><p class="muted">불러오는 중...</p></div>
+    </div>`;
 
   container.querySelectorAll('.report-receipt-row').forEach((row) => {
     row.addEventListener('click', async () => {
@@ -110,18 +114,95 @@ async function renderReportInto(container, slug) {
     });
   });
 
-  try {
-    const { urls } = await callFunction('listReceiptUrls', { tripId: session.tripId });
-    const gal = container.querySelector('#report-gallery');
-    if (gal) {
-      gal.innerHTML = urls.length
-        ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px">${urls.map((u) => `<img src="${escapeHtml(u.url)}" data-id="${u.expenseId}" class="gallery-thumb" style="width:100%;height:90px;object-fit:cover;border-radius:4px;cursor:pointer" alt="영수증">`).join('')}</div>`
-        : '<p class="muted">영수증 사진이 없습니다.</p>';
-      gal.querySelectorAll('.gallery-thumb').forEach((img) => img.addEventListener('click', () => openModal('영수증', `<img src="${escapeHtml(img.src)}" style="width:100%;border-radius:4px" alt="영수증">`)));
+  document.getElementById('tp-upload-btn').addEventListener('click', () => document.getElementById('tp-upload').click());
+  document.getElementById('tp-upload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const btn = document.getElementById('tp-upload-btn');
+    btn.disabled = true; btn.textContent = '올리는 중...';
+    try {
+      const b64 = await fileToBase64(file);
+      await callFunction('addTripPhoto', { tripId: session.tripId, photoBase64: b64, mimeType: file.type });
+      await loadTripPhotos(container, session.tripId);
+      showToast('사진이 추가되었습니다', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = '사진 추가';
+      e.target.value = '';
     }
+  });
+
+  await loadTripPhotos(container, session.tripId);
+}
+
+let tripPhotosCache = [];
+
+async function loadTripPhotos(container, tripId) {
+  const gal = container.querySelector('#tp-gallery');
+  if (!gal) return;
+  try {
+    const { photos } = await callFunction('listTripPhotos', { tripId });
+    tripPhotosCache = photos;
+    gal.innerHTML = photos.length
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px">${photos.map((p, i) => `<img src="${escapeHtml(p.url)}" data-index="${i}" class="tp-thumb" style="width:100%;height:90px;object-fit:cover;border-radius:4px;cursor:pointer" alt="여행사진">`).join('')}</div>`
+      : '<p class="muted">여행사진이 없습니다.</p>';
+    gal.querySelectorAll('.tp-thumb').forEach((img) => {
+      img.addEventListener('click', () => openTripPhoto(tripId, Number(img.dataset.index), container));
+    });
   } catch (err) {
-    const gal = container.querySelector('#report-gallery');
-    if (gal) gal.innerHTML = '<p class="muted">갤러리를 불러오지 못했습니다.</p>';
+    gal.innerHTML = '<p class="muted">사진을 불러오지 못했습니다.</p>';
+  }
+}
+
+function renderLightbox(photos, index) {
+  const p = photos[index];
+  const session = getSession();
+  const canDelete = session.role === 'admin' || p.uploadedBy === session.memberId;
+  return `
+    <div style="text-align:center">
+      <img src="${escapeHtml(p.url)}" style="max-width:100%;border-radius:4px" alt="여행사진">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.6rem">
+        <button type="button" class="btn btn-secondary" id="tp-prev" ${index === 0 ? 'disabled' : ''}>◀ 이전</button>
+        <span class="muted" style="font-size:12px">${index + 1} / ${photos.length}</span>
+        <button type="button" class="btn btn-secondary" id="tp-next" ${index === photos.length - 1 ? 'disabled' : ''}>다음 ▶</button>
+      </div>
+      ${canDelete ? '<button type="button" class="btn btn-danger btn-block" id="tp-delete" style="margin-top:0.6rem">삭제</button>' : ''}
+    </div>`;
+}
+
+function openTripPhoto(tripId, index, container) {
+  const step = (next) => {
+    if (next < 0 || next >= tripPhotosCache.length) return;
+    openTripPhoto(tripId, next, container);
+  };
+
+  openModal('여행사진', renderLightbox(tripPhotosCache, index), {
+    onKeydown: (e) => {
+      if (e.key === 'ArrowLeft') step(index - 1);
+      if (e.key === 'ArrowRight') step(index + 1);
+    },
+  });
+
+  const prevBtn = document.getElementById('tp-prev');
+  const nextBtn = document.getElementById('tp-next');
+  if (prevBtn) prevBtn.addEventListener('click', () => step(index - 1));
+  if (nextBtn) nextBtn.addEventListener('click', () => step(index + 1));
+
+  const delBtn = document.getElementById('tp-delete');
+  if (delBtn) {
+    delBtn.addEventListener('click', async () => {
+      delBtn.disabled = true; delBtn.textContent = '삭제 중...';
+      try {
+        await callFunction('deleteTripPhoto', { tripId, photoId: tripPhotosCache[index].id });
+        closeModal();
+        await loadTripPhotos(container, tripId);
+        showToast('사진이 삭제되었습니다', 'success');
+      } catch (err) {
+        delBtn.disabled = false; delBtn.textContent = '삭제';
+        showToast(err.message, 'error');
+      }
+    });
   }
 }
 
