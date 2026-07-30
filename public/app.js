@@ -70,4 +70,13 @@ async function mount() {
 // swallow rather than surface as an unhandled rejection in either context.
 mount().catch(() => {});
 
+// PWA installability (Chrome's "Add to Home screen"/install prompt needs an
+// active service worker). Guarded the same way as mount() above — this file
+// is also imported from a Node test with no `navigator` global.
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 export { matchRoute };
