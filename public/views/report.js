@@ -114,12 +114,13 @@ async function renderReportInto(container, slug) {
     });
   });
 
-  document.getElementById('tp-upload-btn').addEventListener('click', () => document.getElementById('tp-upload').click());
-  document.getElementById('tp-upload').addEventListener('change', async (e) => {
+  const upBtn = container.querySelector('#tp-upload-btn');
+  const upInput = container.querySelector('#tp-upload');
+  upBtn.addEventListener('click', () => upInput.click());
+  upInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const btn = document.getElementById('tp-upload-btn');
-    btn.disabled = true; btn.textContent = '올리는 중...';
+    upBtn.disabled = true; upBtn.textContent = '올리는 중...';
     try {
       const b64 = await fileToBase64(file);
       await callFunction('addTripPhoto', { tripId: session.tripId, photoBase64: b64, mimeType: file.type });
@@ -128,7 +129,7 @@ async function renderReportInto(container, slug) {
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
-      btn.disabled = false; btn.textContent = '사진 추가';
+      upBtn.disabled = false; upBtn.textContent = '사진 추가';
       e.target.value = '';
     }
   });
