@@ -424,4 +424,49 @@ describe('getReportData per-day normalisation', () => {
     expect(result.currentCategoryAverages).toBeUndefined();
     expect(result.groupCategoryAverages).toBeUndefined();
   });
+
+  test('averages per-day rates across multiple past trips, not the per-day rate of the summed totals', async () => {
+    const db = new FakeFirestore();
+    await seedTrip(db, {
+      id: 'current',
+      group: 'SFA',
+      status: 'active',
+      period: { start: '2026-06-01', end: '2026-06-02' },
+      members: [{ id: 'a', name: 'A', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 40000, enteredBy: 'a', confirmed: true, excludedMembers: [],
+      }],
+    });
+    // past-a: 4 days, 400000 total -> 100000/day
+    await seedTrip(db, {
+      id: 'past-a',
+      group: 'SFA',
+      status: 'completed',
+      period: { start: '2026-01-01', end: '2026-01-04' },
+      members: [{ id: 'x', name: 'X', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 400000, enteredBy: 'x', confirmed: true, excludedMembers: [],
+      }],
+    });
+    // past-b: 2 days, 100000 total -> 50000/day
+    await seedTrip(db, {
+      id: 'past-b',
+      group: 'SFA',
+      status: 'completed',
+      period: { start: '2026-02-01', end: '2026-02-02' },
+      members: [{ id: 'y', name: 'Y', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 100000, enteredBy: 'y', confirmed: true, excludedMembers: [],
+      }],
+    });
+    const { token } = await createSession(db, { role: 'admin', tripId: 'current' });
+
+    const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
+
+    // Correct: mean of each trip's own per-day rate -- (100000 + 50000) / 2 = 75000.
+    // A careless refactor to "per-day rate of the summed totals" would instead give
+    // (400000 + 100000) / (4 + 2) = 500000 / 6 ≈ 83333.33, which must NOT match here.
+    expect(result.groupCategoryPerDayAverages['식비']).toBe(75000);
+    expect(result.tripsInComparison).toBe(2);
+  });
 });
