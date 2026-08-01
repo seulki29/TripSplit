@@ -120,7 +120,10 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 .tag[data-cat="play"]      { background: #feeaf0; color: #8e2956; }
 .tag[data-cat="etc"]       { background: #edeeff; color: #4e3fad; }
 
-.cat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+/* A thin paper-coloured ring keeps the dot separated from whatever background
+   it sits on -- without it, dark mark colours (lodging blue, etc purple) all
+   but vanish against the navy .chip-selected fill. */
+.cat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px var(--paper); }
 
 /* ── MODAL ── */
 .modal-overlay {
@@ -221,7 +224,8 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 /* Direction from the centre line carries the sign; the bar's colour is the
    category's own identity colour. Green/red and the standard blue/red
    diverging pair both failed CVD separation, so polarity is positional. */
-.cmp-bar { position: relative; height: 10px; min-width: 60px; }
+.cmp-cell { display: flex; align-items: center; gap: 0.5rem; }
+.cmp-bar { position: relative; height: 10px; min-width: 60px; flex: none; }
 .cmp-bar::before {
   content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px;
   width: 1px; background: var(--rule);
@@ -229,6 +233,7 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 .cmp-bar-fill { position: absolute; top: 0; height: 10px; border-radius: 2px; min-width: 2px; }
 .cmp-bar-pos { left: 50%; }
 .cmp-bar-neg { right: 50%; }
+.cmp-pct { white-space: nowrap; }
 
 @media (max-width: 480px) {
   .cmp-table { font-size: 12px; }
