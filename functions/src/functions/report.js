@@ -38,6 +38,22 @@ function perPersonCategoryAverage(members, expenses) {
   return { averages };
 }
 
+function parseIsoDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+// Inclusive day count. Parsed as UTC so a DST boundary inside the range cannot
+// shift the result by a day. null means "cannot be compared on a per-day basis".
+function tripDays(period) {
+  if (!period) return null;
+  const start = parseIsoDate(period.start);
+  const end = parseIsoDate(period.end);
+  if (start === null || end === null || end < start) return null;
+  return Math.round((end - start) / 86400000) + 1;
+}
+
 async function getReportData(db, data) {
   const { sessionToken, tripId } = data;
   await requireSession(db, sessionToken, ['admin', 'member'], tripId);
@@ -54,7 +70,14 @@ async function getReportData(db, data) {
     account: byId[pm.id]?.account ?? null,
     settled: byId[pm.id]?.settled ?? false,
   }));
-  const { averages: currentCategoryAverages } = perPersonCategoryAverage(members, expenses);
+  const days = tripDays(trip.period);
+  const { averages: currentTotals } = perPersonCategoryAverage(members, expenses);
+  const currentCategoryPerDay = {};
+  if (days) {
+    for (const category of Object.keys(currentTotals)) {
+      currentCategoryPerDay[category] = currentTotals[category] / days;
+    }
+  }
 
   const otherTripsSnap = await db.collection('trips')
     .where('group', '==', trip.group)
@@ -64,18 +87,24 @@ async function getReportData(db, data) {
 
   const perCategorySums = {};
   const perCategoryCounts = {};
+  let comparableTrips = 0;
   for (const tripDoc of otherTrips) {
+    // A trip with no usable period cannot be put on a per-day axis, so it is
+    // excluded from the average and from the count the UI shows.
+    const pastDays = tripDays(tripDoc.data().period);
+    if (!pastDays) continue;
+    comparableTrips += 1;
     const bundle = await loadTripBundle(db, tripDoc.id);
     const { averages } = perPersonCategoryAverage(bundle.members, bundle.expenses);
     for (const category of Object.keys(averages)) {
-      perCategorySums[category] = (perCategorySums[category] || 0) + averages[category];
+      perCategorySums[category] = (perCategorySums[category] || 0) + averages[category] / pastDays;
       perCategoryCounts[category] = (perCategoryCounts[category] || 0) + 1;
     }
   }
 
-  const groupCategoryAverages = {};
+  const groupCategoryPerDayAverages = {};
   for (const category of Object.keys(perCategorySums)) {
-    groupCategoryAverages[category] = perCategorySums[category] / perCategoryCounts[category];
+    groupCategoryPerDayAverages[category] = perCategorySums[category] / perCategoryCounts[category];
   }
 
   return {
@@ -85,10 +114,11 @@ async function getReportData(db, data) {
     members,
     expenses,
     settlement,
-    currentCategoryAverages,
-    groupCategoryAverages,
-    tripsInComparison: otherTrips.length,
+    tripDays: days,
+    currentCategoryPerDay,
+    groupCategoryPerDayAverages,
+    tripsInComparison: days ? comparableTrips : 0,
   };
 }
 
-module.exports = { getReportData, perPersonCategoryAverage };
+module.exports = { getReportData, perPersonCategoryAverage, tripDays };

@@ -1,11 +1,13 @@
 const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { createSession } = require('../../src/lib/sessions');
-const { getReportData, perPersonCategoryAverage } = require('../../src/functions/report');
+const { getReportData, perPersonCategoryAverage, tripDays } = require('../../src/functions/report');
 const { computeSettlement } = require('../../src/lib/settlement');
 
-async function seedTrip(db, { id, group, status, members, expenses }) {
+async function seedTrip(db, {
+  id, group, status, members, expenses, period = { start: '2026-01-01', end: '2026-01-02' },
+}) {
   await db.collection('trips').doc(id).set({
-    name: id, group, status, period: { start: null, end: null }, location: '', lodging: '',
+    name: id, group, status, period, location: '', lodging: '',
   });
   for (const m of members) {
     await db.collection('trips').doc(id).collection('members').doc(m.id).set(m);
@@ -117,7 +119,9 @@ describe('getReportData', () => {
     const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
 
     expect(result.settlement.perMember.find((m) => m.id === 'a').due).toBe(20000);
-    expect(result.currentCategoryAverages['식비']).toBe(20000);
+    // 20000 per person over a 2-day trip
+    expect(result.currentCategoryPerDay['식비']).toBe(10000);
+    expect(result.tripDays).toBe(2);
   });
 
   test('returns each expense with its id, photoPath, and excludedMembers', async () => {
@@ -211,7 +215,8 @@ describe('getReportData', () => {
 
     const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
 
-    expect(result.groupCategoryAverages['식비']).toBe(30000);
+    // past-sfa: 30000 per person over 2 days
+    expect(result.groupCategoryPerDayAverages['식비']).toBe(15000);
     expect(result.tripsInComparison).toBe(1);
   });
 
@@ -246,5 +251,177 @@ describe('getReportData', () => {
 
     expect(settlement.perMember.reduce((s, m) => s + m.due, 0)).toBe(settlement.totalConfirmed);
     expect(settlement.perMember.reduce((s, m) => s + m.net, 0)).toBe(0);
+  });
+});
+
+describe('tripDays', () => {
+  test('counts both endpoints, so a same-day trip is one day', () => {
+    expect(tripDays({ start: '2026-07-30', end: '2026-07-30' })).toBe(1);
+  });
+
+  test('counts an inclusive multi-day range', () => {
+    expect(tripDays({ start: '2026-07-30', end: '2026-08-02' })).toBe(4);
+  });
+
+  test('is immune to DST -- the span is measured in UTC', () => {
+    expect(tripDays({ start: '2026-03-01', end: '2026-03-31' })).toBe(31);
+  });
+
+  test('returns null for a missing, partial, or malformed period', () => {
+    expect(tripDays(null)).toBeNull();
+    expect(tripDays({})).toBeNull();
+    expect(tripDays({ start: null, end: null })).toBeNull();
+    expect(tripDays({ start: '2026-07-30', end: null })).toBeNull();
+    expect(tripDays({ start: '2026/07/30', end: '2026/08/02' })).toBeNull();
+  });
+
+  test('returns null when the end precedes the start', () => {
+    expect(tripDays({ start: '2026-08-02', end: '2026-07-30' })).toBeNull();
+  });
+});
+
+describe('getReportData per-day normalisation', () => {
+  test('normalises the current trip by its own length', async () => {
+    const db = new FakeFirestore();
+    await seedTrip(db, {
+      id: 'current',
+      group: 'SFA',
+      status: 'active',
+      period: { start: '2026-07-01', end: '2026-07-04' }, // 4 days
+      members: [{ id: 'a', name: 'A', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 80000, enteredBy: 'a', confirmed: true, excludedMembers: [],
+      }],
+    });
+    const { token } = await createSession(db, { role: 'admin', tripId: 'current' });
+
+    const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
+
+    expect(result.tripDays).toBe(4);
+    expect(result.currentCategoryPerDay['식비']).toBe(20000); // 80000 / 4
+  });
+
+  test('compares against past trips on a per-day basis, so trip length does not skew it', async () => {
+    const db = new FakeFirestore();
+    await seedTrip(db, {
+      id: 'current',
+      group: 'SFA',
+      status: 'active',
+      period: { start: '2026-07-01', end: '2026-07-02' }, // 2 days
+      members: [{ id: 'a', name: 'A', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 40000, enteredBy: 'a', confirmed: true, excludedMembers: [],
+      }],
+    });
+    // A 4-day trip that spent twice as much in total -- but the same per day.
+    await seedTrip(db, {
+      id: 'past-long',
+      group: 'SFA',
+      status: 'completed',
+      period: { start: '2026-01-01', end: '2026-01-04' },
+      members: [{ id: 'x', name: 'X', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 80000, enteredBy: 'x', confirmed: true, excludedMembers: [],
+      }],
+    });
+    const { token } = await createSession(db, { role: 'admin', tripId: 'current' });
+
+    const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
+
+    expect(result.currentCategoryPerDay['식비']).toBe(20000);
+    expect(result.groupCategoryPerDayAverages['식비']).toBe(20000);
+    expect(result.tripsInComparison).toBe(1);
+  });
+
+  test('drops a past trip with no usable period from both the average and the count', async () => {
+    const db = new FakeFirestore();
+    await seedTrip(db, {
+      id: 'current',
+      group: 'SFA',
+      status: 'active',
+      period: { start: '2026-07-01', end: '2026-07-02' },
+      members: [{ id: 'a', name: 'A', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 40000, enteredBy: 'a', confirmed: true, excludedMembers: [],
+      }],
+    });
+    await seedTrip(db, {
+      id: 'past-good',
+      group: 'SFA',
+      status: 'completed',
+      period: { start: '2026-01-01', end: '2026-01-02' },
+      members: [{ id: 'x', name: 'X', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 30000, enteredBy: 'x', confirmed: true, excludedMembers: [],
+      }],
+    });
+    await seedTrip(db, {
+      id: 'past-undated',
+      group: 'SFA',
+      status: 'completed',
+      period: { start: null, end: null },
+      members: [{ id: 'y', name: 'Y', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 999999, enteredBy: 'y', confirmed: true, excludedMembers: [],
+      }],
+    });
+    const { token } = await createSession(db, { role: 'admin', tripId: 'current' });
+
+    const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
+
+    expect(result.groupCategoryPerDayAverages['식비']).toBe(15000); // 30000 / 2, undated one ignored
+    expect(result.tripsInComparison).toBe(1);
+  });
+
+  test('reports tripDays null and no comparison when the current trip has no period', async () => {
+    const db = new FakeFirestore();
+    await seedTrip(db, {
+      id: 'current',
+      group: 'SFA',
+      status: 'active',
+      period: { start: null, end: null },
+      members: [{ id: 'a', name: 'A', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 40000, enteredBy: 'a', confirmed: true, excludedMembers: [],
+      }],
+    });
+    await seedTrip(db, {
+      id: 'past-good',
+      group: 'SFA',
+      status: 'completed',
+      period: { start: '2026-01-01', end: '2026-01-02' },
+      members: [{ id: 'x', name: 'X', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 30000, enteredBy: 'x', confirmed: true, excludedMembers: [],
+      }],
+    });
+    const { token } = await createSession(db, { role: 'admin', tripId: 'current' });
+
+    const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
+
+    expect(result.tripDays).toBeNull();
+    expect(result.currentCategoryPerDay).toEqual({});
+    expect(result.tripsInComparison).toBe(0);
+    // The settlement itself is unaffected by a missing period.
+    expect(result.settlement.totalConfirmed).toBe(40000);
+  });
+
+  test('no longer ships the trip-total category fields', async () => {
+    const db = new FakeFirestore();
+    await seedTrip(db, {
+      id: 'current',
+      group: 'SFA',
+      status: 'active',
+      members: [{ id: 'a', name: 'A', weight: 1 }],
+      expenses: [{
+        category: '식비', amount: 40000, enteredBy: 'a', confirmed: true, excludedMembers: [],
+      }],
+    });
+    const { token } = await createSession(db, { role: 'admin', tripId: 'current' });
+
+    const result = await getReportData(db, { sessionToken: token, tripId: 'current' });
+
+    expect(result.currentCategoryAverages).toBeUndefined();
+    expect(result.groupCategoryAverages).toBeUndefined();
   });
 });
