@@ -4,15 +4,7 @@ import { openModal, closeModal, showToast, escapeHtml } from '../ui.js';
 import { formatDate } from '../format.js';
 import { categoryTag } from '../categories.js';
 import { renderTripPhotosInto } from './tripPhotos.js';
-
-const CATEGORY_COLORS = {
-  숙박: '#1a4a6b',
-  식비: '#2d7aaa',
-  장보기: '#c4874a',
-  교통비: '#8a3a1a',
-  놀이: '#1a5c3a',
-  기타: '#6a5a8a',
-};
+import { renderDonutChart, renderCategoryComparison } from '../charts.js';
 
 async function renderReportInto(container, slug) {
   const session = getSession();
@@ -27,7 +19,10 @@ async function renderReportInto(container, slug) {
     if (rb) rb.addEventListener('click', () => renderReportInto(container, slug));
     return;
   }
-  const { trip, members, expenses, settlement, currentCategoryAverages, groupCategoryAverages, tripsInComparison } = data;
+  const {
+    trip, members, expenses, settlement,
+    tripDays, currentCategoryPerDay, groupCategoryPerDayAverages, tripsInComparison,
+  } = data;
   const nameById = Object.fromEntries(members.map((m) => [m.id, m.name]));
   const confirmedExpenses = expenses.filter((e) => e.confirmed);
 
@@ -46,7 +41,7 @@ async function renderReportInto(container, slug) {
     <div class="section"><h2>전체 지출 내역</h2>${renderExpenseTable(confirmedExpenses, nameById)}</div>
     <div class="section"><h2>카테고리 분석</h2>
       ${renderDonutChart(settlement.categoryTotals)}
-      ${tripsInComparison > 0 ? renderComparisonBars(currentCategoryAverages, groupCategoryAverages) : '<p class="muted">비교할 과거 여행이 아직 없습니다.</p>'}
+      ${renderComparisonSection(tripDays, currentCategoryPerDay, groupCategoryPerDayAverages, tripsInComparison)}
     </div>
     <div class="section"><h2>결제자별 지출</h2>${renderPayerSummary(settlement.perMember)}</div>
     <div class="section"><h2>정산 요약</h2>
@@ -155,50 +150,10 @@ function renderExpenseTable(expenses, nameById) {
     </div>`;
 }
 
-function renderDonutChart(categoryTotals) {
-  const total = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
-  if (total <= 0) return '<p class="muted">지출 내역이 없습니다.</p>';
-
-  const r = 40;
-  const circumference = 2 * Math.PI * r;
-  let offset = 0;
-  const circles = Object.entries(categoryTotals).map(([category, amount]) => {
-    const fraction = amount / total;
-    const dash = fraction * circumference;
-    const circle = `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${CATEGORY_COLORS[category] || '#999'}" stroke-width="16" stroke-dasharray="${dash} ${circumference - dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 50 50)"></circle>`;
-    offset += dash;
-    return circle;
-  }).join('');
-
-  const legend = Object.entries(categoryTotals).map(([category, amount]) => `
-    <div style="display:flex;align-items:center;gap:0.4rem;font-size:12px;margin-bottom:0.3rem">
-      <span style="width:10px;height:10px;border-radius:50%;background:${CATEGORY_COLORS[category] || '#999'};display:inline-block"></span>
-      ${category} · ${Number(amount).toLocaleString()}원
-    </div>`).join('');
-
-  return `
-    <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap;margin-bottom:1.5rem">
-      <svg viewBox="0 0 100 100" width="140" height="140">${circles}</svg>
-      <div>${legend}</div>
-    </div>`;
-}
-
-function renderComparisonBars(currentAverages, groupAverages) {
-  return Object.keys(currentAverages).map((category) => {
-    const current = currentAverages[category];
-    const group = groupAverages[category];
-    if (group == null) return '';
-    const pct = Math.round(((current - group) / group) * 100);
-    const sign = pct >= 0 ? '+' : '';
-    const cls = pct >= 0 ? 'pay' : 'receive';
-    return `
-      <div style="margin-bottom:0.6rem">
-        <span class="label">${category}</span>
-        <p style="font-size:13px">1인 ${Number(current).toLocaleString()}원 · 그룹 평균 대비
-          <strong style="color:var(--${cls})">${sign}${pct}%</strong>
-        </p>
-      </div>`;
-  }).join('');
+function renderComparisonSection(tripDays, currentPerDay, groupPerDay, tripsInComparison) {
+  if (!tripDays) return '<p class="muted">여행 기간이 설정되지 않아 하루 기준 비교를 계산할 수 없습니다.</p>';
+  if (tripsInComparison === 0) return '<p class="muted">비교할 과거 여행이 아직 없습니다.</p>';
+  return renderCategoryComparison(currentPerDay, groupPerDay, tripDays);
 }
 
 function renderPayerSummary(perMember) {

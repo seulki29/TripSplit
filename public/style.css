@@ -206,3 +206,33 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
   display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .tp-frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* ── CATEGORY COMPARISON ── */
+.cmp-table { width: 100%; border-collapse: collapse; }
+.cmp-table thead th {
+  text-align: left; font-size: 11px; font-weight: 500;
+  color: var(--ink-3); padding: 0.5rem 0.4rem;
+}
+.cmp-table td { padding: 0.55rem 0.4rem; border-top: 1px solid var(--rule); vertical-align: middle; }
+.cmp-table .cmp-num { text-align: right; white-space: nowrap; }
+.cmp-table .cmp-cat { white-space: nowrap; }
+.cmp-legend-row { display: flex; align-items: center; gap: 0.4rem; font-size: 12px; margin-bottom: 0.3rem; }
+
+/* Direction from the centre line carries the sign; the bar's colour is the
+   category's own identity colour. Green/red and the standard blue/red
+   diverging pair both failed CVD separation, so polarity is positional. */
+.cmp-bar { position: relative; height: 10px; min-width: 60px; }
+.cmp-bar::before {
+  content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px;
+  width: 1px; background: var(--rule);
+}
+.cmp-bar-fill { position: absolute; top: 0; height: 10px; border-radius: 2px; min-width: 2px; }
+.cmp-bar-pos { left: 50%; }
+.cmp-bar-neg { right: 50%; }
+
+@media (max-width: 480px) {
+  .cmp-table { font-size: 12px; }
+  .cmp-table thead th { font-size: 10px; padding: 0.4rem 0.25rem; }
+  .cmp-table td { padding: 0.45rem 0.25rem; }
+  .cmp-table .cmp-group { display: none; }
+}
