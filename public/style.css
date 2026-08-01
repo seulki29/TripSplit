@@ -109,6 +109,18 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
   background: var(--paper-2); color: var(--ink-2);
 }
 
+/* Per-category tint + ink. Tint/ink hold the mark hue but shift lightness so the
+   label clears 4.5:1 on its own chip -- the saturated marks are for chart marks
+   only, where a text label always sits beside them. */
+.tag[data-cat="lodging"]   { background: #e5f1ff; color: #0052ac; }
+.tag[data-cat="food"]      { background: #ffeae2; color: #9e1c00; }
+.tag[data-cat="grocery"]   { background: #e4f5ec; color: #006b3c; }
+.tag[data-cat="transport"] { background: #fbeede; color: #864100; }
+.tag[data-cat="play"]      { background: #feeaf0; color: #8e2956; }
+.tag[data-cat="etc"]       { background: #edeeff; color: #4e3fad; }
+
+.cat-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
 /* ── MODAL ── */
 .modal-overlay {
   display: none; position: fixed; inset: 0; background: rgba(10,10,10,0.6);

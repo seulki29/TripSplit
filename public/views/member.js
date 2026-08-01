@@ -3,8 +3,8 @@ import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 } from '../ui.js';
 import { renderReportInto } from './report.js';
 import { formatDate } from '../format.js';
+import { CATEGORIES, categoryTag } from '../categories.js';
 
-const CATEGORIES = ['숙박', '식비', '장보기', '교통비', '놀이', '기타'];
 let currentTab = 'expenses';
 let renderToken = 0;
 
@@ -82,7 +82,7 @@ async function loadExpenses(body, slug, myToken) {
       <div class="card${e.photoPath ? ' expense-card-receipt' : ''}" data-id="${e.id}" style="margin-bottom:0.6rem;${e.confirmed ? 'opacity:0.7;' : ''}${e.photoPath ? 'cursor:pointer' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem">
           <div style="min-width:0">
-            <span class="tag">${e.category}</span>
+            ${categoryTag(e.category)}
             <strong style="margin-left:0.5rem">${Number(e.amount).toLocaleString()}원</strong>
             <span class="muted" style="font-size:12px;margin-left:0.5rem">${escapeHtml(formatDate(e.date))} · ${escapeHtml(nameById[e.enteredBy] || '?')}</span>
             ${e.confirmed ? '<span class="badge badge-locked" style="margin-left:0.5rem">🔒 확정됨</span>' : ''}
