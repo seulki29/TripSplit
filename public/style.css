@@ -169,3 +169,26 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 @media (max-width: 480px) {
   .card-actions .btn { padding: 0.3rem 0.5rem; font-size: 11px; }
 }
+
+/* ── EXPENSE TABLE ── */
+/* Date / payer / amount are nowrap so a 3-glyph name never folds and the '원'
+   never drops to its own line; the description column is the only flexible one,
+   so it absorbs the squeeze. No ellipsis on the payer -- truncating '홍길동…'
+   is worse than the wrap it replaces. */
+.expense-table { width: 100%; border-collapse: collapse; }
+.expense-table thead th {
+  text-align: left; font-size: 11px; font-weight: 500;
+  color: var(--ink-3); padding: 0.5rem 0.4rem;
+}
+.expense-table td { padding: 0.55rem 0.4rem; border-top: 1px solid var(--rule); vertical-align: top; }
+.expense-table .col-date,
+.expense-table .col-payer,
+.expense-table .col-amount { white-space: nowrap; }
+.expense-table .col-amount { text-align: right; }
+.expense-table .col-desc { word-break: break-word; }
+
+@media (max-width: 480px) {
+  .expense-table { font-size: 12px; }
+  .expense-table thead th { font-size: 10px; padding: 0.4rem 0.3rem; }
+  .expense-table td { padding: 0.45rem 0.3rem; }
+}

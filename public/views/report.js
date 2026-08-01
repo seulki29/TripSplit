@@ -226,21 +226,22 @@ function mount(root, { slug }) {
 function renderExpenseTable(expenses, nameById) {
   return `
     <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse">
-      <thead><tr style="text-align:left;font-size:11px;color:var(--ink-3)">
-        <th style="padding:0.5rem">날짜</th><th>카테고리</th><th>내용</th><th>결제자</th><th style="text-align:right">금액</th>
+    <table class="expense-table">
+      <thead><tr>
+        <th class="col-date">날짜</th><th>카테고리</th><th>내용</th>
+        <th class="col-payer">결제자</th><th class="col-amount">금액</th>
       </tr></thead>
       <tbody>
         ${expenses.map((e) => `
-          <tr style="border-top:1px solid var(--rule)${e.photoPath ? ';cursor:pointer' : ''}" ${e.photoPath ? `class="report-receipt-row" data-id="${e.id}"` : ''}>
-            <td style="padding:0.6rem 0.5rem">${escapeHtml(formatDate(e.date))}</td>
+          <tr${e.photoPath ? ' class="report-receipt-row" style="cursor:pointer" data-id="' + e.id + '"' : ''}>
+            <td class="col-date">${escapeHtml(formatDate(e.date))}</td>
             <td>${categoryTag(e.category)}</td>
-            <td>${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}
+            <td class="col-desc">${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}
               ${e.excludedMembers && e.excludedMembers.length ? `<span class="muted" style="font-size:11px">· 제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</span>` : ''}
               ${e.photoPath ? '<span class="muted" style="font-size:11px">· 📷</span>' : ''}
             </td>
-            <td>${escapeHtml(nameById[e.enteredBy] || '?')}</td>
-            <td style="text-align:right" class="mono">${Number(e.amount).toLocaleString()}원</td>
+            <td class="col-payer">${escapeHtml(nameById[e.enteredBy] || '?')}</td>
+            <td class="col-amount mono">${Number(e.amount).toLocaleString()}원</td>
           </tr>`).join('')}
       </tbody>
     </table>
