@@ -68,6 +68,44 @@ describe('ui.js', () => {
     assert.equal(selected, '식비');
   });
 
+  test('renderChipGroup renders no dot when dotColor is omitted (existing callers unchanged)', () => {
+    const container = document.createElement('div');
+    renderChipGroup(container, ['숙박', '식비'], '숙박', () => {});
+    assert.equal(container.querySelectorAll('.cat-dot').length, 0);
+    assert.equal(container.querySelectorAll('.chip')[0].textContent, '숙박');
+  });
+
+  test('renderChipGroup prepends a coloured dot when dotColor returns a colour', () => {
+    const container = document.createElement('div');
+    renderChipGroup(container, ['숙박', '식비'], '숙박', () => {}, {
+      dotColor: (opt) => (opt === '숙박' ? '#2a78d6' : '#eb6834'),
+    });
+    const dots = container.querySelectorAll('.cat-dot');
+    assert.equal(dots.length, 2);
+    // jsdom may serialise the colour as hex or as rgb() -- accept either.
+    assert.match(dots[0].getAttribute('style'), /#2a78d6|rgb\(42,\s*120,\s*214\)/);
+    // The label still reads as plain text -- the dot contributes none.
+    assert.equal(container.querySelectorAll('.chip')[0].textContent, '숙박');
+  });
+
+  test('renderChipGroup skips the dot for an option whose dotColor is falsy', () => {
+    const container = document.createElement('div');
+    renderChipGroup(container, ['숙박', '식비'], '숙박', () => {}, {
+      dotColor: (opt) => (opt === '숙박' ? '#2a78d6' : null),
+    });
+    assert.equal(container.querySelectorAll('.cat-dot').length, 1);
+  });
+
+  test('renderChipGroup still fires onSelect when dots are enabled', () => {
+    const container = document.createElement('div');
+    let selected = null;
+    renderChipGroup(container, ['숙박', '식비'], '숙박', (opt) => { selected = opt; }, {
+      dotColor: () => '#2a78d6',
+    });
+    container.querySelectorAll('.chip')[1].click();
+    assert.equal(selected, '식비');
+  });
+
   test('clicking inside the modal box does not close the modal', () => {
     openModal('제목', '내용');
     document.querySelector('.modal-box').click();

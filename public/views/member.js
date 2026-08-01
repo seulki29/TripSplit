@@ -3,7 +3,7 @@ import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 } from '../ui.js';
 import { renderReportInto } from './report.js';
 import { formatDate } from '../format.js';
-import { CATEGORIES, categoryTag } from '../categories.js';
+import { CATEGORIES, categoryTag, categoryMark } from '../categories.js';
 
 let currentTab = 'expenses';
 let renderToken = 0;
@@ -175,7 +175,7 @@ function openExpenseModal(body, slug) {
     renderChipGroup(document.getElementById('me-category'), CATEGORIES, category, (c) => {
       category = c;
       rerenderCategoryChips();
-    });
+    }, { dotColor: categoryMark });
   }
   rerenderCategoryChips();
 
@@ -274,7 +274,7 @@ function openMemberExpenseEditModal(body, slug, exp) {
     renderChipGroup(document.getElementById('mee-category'), CATEGORIES, category, (c) => {
       category = c;
       rerenderChips();
-    });
+    }, { dotColor: categoryMark });
   }
   rerenderChips();
 

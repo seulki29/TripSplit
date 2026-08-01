@@ -61,14 +61,23 @@ function showToast(message, kind = 'info') {
   }, 3000);
 }
 
-function renderChipGroup(container, options, selected, onSelect) {
+// dotColor is a function (option) => colour|null, so this stays generic -- the
+// category mapping lives in categories.js, not here.
+function renderChipGroup(container, options, selected, onSelect, { dotColor } = {}) {
   container.innerHTML = '';
   container.className = 'chip-group';
   options.forEach((opt) => {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'chip' + (opt === selected ? ' chip-selected' : '');
-    chip.textContent = opt;
+    const color = dotColor ? dotColor(opt) : null;
+    if (color) {
+      const dot = document.createElement('span');
+      dot.className = 'cat-dot';
+      dot.style.background = color;
+      chip.appendChild(dot);
+    }
+    chip.appendChild(document.createTextNode(opt));
     chip.addEventListener('click', () => onSelect(opt));
     container.appendChild(chip);
   });

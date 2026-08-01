@@ -3,7 +3,7 @@ import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 } from '../ui.js';
 import { renderReportInto } from './report.js';
 import { formatDate } from '../format.js';
-import { CATEGORIES, categoryTag } from '../categories.js';
+import { CATEGORIES, categoryTag, categoryMark } from '../categories.js';
 
 let currentTab = 'setup';
 let membersCache = [];
@@ -388,7 +388,7 @@ function openAdminExpenseModal(body, slug, members) {
     renderChipGroup(document.getElementById('ae-category'), CATEGORIES, category, (c) => {
       category = c;
       rerenderCategoryChips();
-    });
+    }, { dotColor: categoryMark });
   }
   rerenderCategoryChips();
 
@@ -487,7 +487,7 @@ function openAdminExpenseEditModal(body, slug, exp) {
   `);
 
   function rerenderChips() {
-    renderChipGroup(document.getElementById('ee-category'), CATEGORIES, category, (c) => { category = c; rerenderChips(); });
+    renderChipGroup(document.getElementById('ee-category'), CATEGORIES, category, (c) => { category = c; rerenderChips(); }, { dotColor: categoryMark });
   }
   rerenderChips();
 

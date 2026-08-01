@@ -89,6 +89,7 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 /* ── CHIPS (category selector) ── */
 .chip-group { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
   padding: 0.4rem 0.8rem; border: 1px solid var(--rule); border-radius: 999px;
   font-size: 12px; font-family: var(--f-kr); background: var(--paper); color: var(--ink-2);
   cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
