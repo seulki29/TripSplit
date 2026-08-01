@@ -59,8 +59,12 @@ async function resizeImageFile(file, maxEdge = MAX_EDGE) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  canvas.getContext('2d').drawImage(image.source, 0, 0, width, height);
-  image.release();
+
+  try {
+    canvas.getContext('2d').drawImage(image.source, 0, 0, width, height);
+  } finally {
+    image.release();
+  }
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
   if (!blob) throw new Error('IMAGE_ENCODE_FAILED');
