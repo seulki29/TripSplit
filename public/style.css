@@ -192,3 +192,17 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
   .expense-table thead th { font-size: 10px; padding: 0.4rem 0.3rem; }
   .expense-table td { padding: 0.45rem 0.3rem; }
 }
+
+/* ── TRIP PHOTOS ── */
+.tp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; }
+.tp-thumb { width: 100%; height: 90px; object-fit: cover; border-radius: var(--radius); cursor: pointer; }
+
+/* A square frame with object-fit:contain pins the image box regardless of
+   orientation, so the prev/next/delete buttons below never shift. Square beats
+   4/3 here: a 3:4 portrait renders 293x390 instead of 220x293. */
+.tp-frame {
+  aspect-ratio: 1 / 1; width: 100%;
+  background: var(--paper-2); border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.tp-frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
