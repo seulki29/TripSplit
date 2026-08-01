@@ -1,6 +1,7 @@
 import { callFunction } from '../api.js';
 import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, escapeHtml, fileToBase64 } from '../ui.js';
+import { formatDate } from '../format.js';
 
 const CATEGORY_COLORS = {
   숙박: '#1a4a6b',
@@ -231,7 +232,7 @@ function renderExpenseTable(expenses, nameById) {
       <tbody>
         ${expenses.map((e) => `
           <tr style="border-top:1px solid var(--rule)${e.photoPath ? ';cursor:pointer' : ''}" ${e.photoPath ? `class="report-receipt-row" data-id="${e.id}"` : ''}>
-            <td style="padding:0.6rem 0.5rem">${escapeHtml(e.date)}</td>
+            <td style="padding:0.6rem 0.5rem">${escapeHtml(formatDate(e.date))}</td>
             <td><span class="tag">${e.category}</span></td>
             <td>${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}
               ${e.excludedMembers && e.excludedMembers.length ? `<span class="muted" style="font-size:11px">· 제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</span>` : ''}
