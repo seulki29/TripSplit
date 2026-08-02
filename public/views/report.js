@@ -4,7 +4,7 @@ import { openModal, closeModal, showToast, escapeHtml } from '../ui.js';
 import { formatDate } from '../format.js';
 import { categoryTag } from '../categories.js';
 import { renderTripPhotosInto } from './tripPhotos.js';
-import { renderDonutChart, renderCategoryComparison } from '../charts.js';
+import { renderDonutChart, renderCategoryComparison, renderComparisonDetail } from '../charts.js';
 
 async function renderReportInto(container, slug) {
   const session = getSession();
@@ -76,6 +76,26 @@ async function renderReportInto(container, slug) {
         btn.disabled = false;
         showToast(err.message, 'error');
       }
+    });
+  });
+
+  // Both the numerator and the headcount come from the settlement the server
+  // already computed, so the modal's arithmetic cannot drift from the table's.
+  const dueHeadcount = settlement.perMember.filter((m) => m.due > 0).length;
+  container.querySelectorAll('.cmp-row').forEach((row) => {
+    row.addEventListener('click', (ev) => {
+      const category = row.dataset.category;
+      const cell = ev.target.closest('[data-field]');
+      openModal(`${category} 산출 근거`, renderComparisonDetail({
+        category,
+        categoryTotal: settlement.categoryTotals[category] ?? 0,
+        headcount: dueHeadcount,
+        tripDays,
+        currentPerDay: currentCategoryPerDay[category],
+        groupPerDay: groupCategoryPerDayAverages[category],
+        tripsInComparison,
+        focus: cell ? cell.dataset.field : null,
+      }));
     });
   });
 

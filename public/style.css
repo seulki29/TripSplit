@@ -241,3 +241,24 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
   .cmp-table td { padding: 0.45rem 0.25rem; }
   .cmp-table .cmp-group { display: none; }
 }
+
+/* ── COMPARISON DETAIL ── */
+.cmp-row { cursor: pointer; }
+.cmp-row:hover { background: var(--paper-2); }
+
+.cmp-detail-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 0.75rem; padding: 0.4rem 0.5rem; border-radius: var(--radius);
+}
+.cmp-detail-row .label { flex: none; }
+.cmp-detail-value { text-align: right; font-size: 13px; }
+.cmp-focus { background: var(--paper-2); }
+.cmp-detail-rule { border-top: 1px solid var(--rule); margin: 0.5rem 0; }
+
+.cmp-help { margin-top: 0.9rem; }
+.cmp-help summary {
+  cursor: pointer; color: var(--ink-3); font-size: 12px;
+  font-family: var(--f-kr); padding: 0.3rem 0;
+}
+.cmp-help dt { font-weight: 500; font-size: 12px; margin-top: 0.6rem; }
+.cmp-help dd { margin: 0.15rem 0 0; color: var(--ink-2); font-size: 12px; line-height: 1.5; }
