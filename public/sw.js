@@ -1,4 +1,8 @@
-const CACHE_NAME = 'tripsplit-shell-v2';
+// Bump on any release that changes a cached asset. The fetch handler caches
+// every same-origin GET, not just SHELL_ASSETS, so view modules under
+// /views/ and /charts.js are cached too — without a bump, returning users
+// keep running the previous release's modules against the new backend.
+const CACHE_NAME = 'tripsplit-shell-v3';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
