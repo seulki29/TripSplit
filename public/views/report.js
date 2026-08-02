@@ -153,7 +153,7 @@ function renderExpenseTable(expenses, nameById) {
 function renderComparisonSection(tripDays, currentPerDay, groupPerDay, tripsInComparison) {
   if (!tripDays) return '<p class="muted">여행 기간이 설정되지 않아 하루 기준 비교를 계산할 수 없습니다.</p>';
   if (tripsInComparison === 0) return '<p class="muted">비교할 과거 여행이 아직 없습니다.</p>';
-  return renderCategoryComparison(currentPerDay, groupPerDay, tripDays);
+  return renderCategoryComparison(currentPerDay, groupPerDay, tripDays, tripsInComparison);
 }
 
 function renderPayerSummary(perMember) {

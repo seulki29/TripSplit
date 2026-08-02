@@ -13,7 +13,8 @@ function theadCellCount(html) {
 
 function bodyRows(html) {
   const tbody = html.match(/<tbody>([\s\S]*?)<\/tbody>/)[1];
-  return (tbody.match(/<tr>([\s\S]*?)<\/tr>/g) || []);
+  // The opening tag carries class/data attributes, so it cannot be matched literally.
+  return (tbody.match(/<tr[^>]*>([\s\S]*?)<\/tr>/g) || []);
 }
 
 // The category name renders as plain text after the dot span (e.g.
@@ -125,6 +126,47 @@ describe('charts.js renderCategoryComparison', () => {
   test('shows the Korean empty message when currentPerDay has no categories at all', () => {
     const html = renderCategoryComparison({}, {}, 3);
     assert.equal(html, '<p class="muted">비교할 수 있는 카테고리가 없습니다.</p>');
+  });
+
+  test('each row carries its category and each figure cell its field name', () => {
+    const html = renderCategoryComparison(currentPerDay, groupPerDay, tripDays, 2);
+    const row = rowFor(html, '숙박');
+    assert.match(row, /data-category="숙박"/);
+    assert.match(row, /class="cmp-row"/);
+    for (const field of ['current', 'group', 'cmp', 'delta']) {
+      assert.match(row, new RegExp(`data-field="${field}"`), `missing data-field=${field}`);
+    }
+  });
+
+  test('the category name cell has no data-field, so tapping it focuses nothing', () => {
+    const html = renderCategoryComparison(currentPerDay, groupPerDay, tripDays, 2);
+    const row = rowFor(html, '숙박');
+    const catCell = row.match(/<td class="cmp-cat"[^>]*>/)[0];
+    assert.doesNotMatch(catCell, /data-field/);
+  });
+
+  test('a row without a group baseline still carries its data-field cells', () => {
+    const html = renderCategoryComparison({ 놀이: 5000 }, {}, tripDays, 2);
+    const row = rowFor(html, '놀이');
+    for (const field of ['current', 'group', 'cmp', 'delta']) {
+      assert.match(row, new RegExp(`data-field="${field}"`), `missing data-field=${field}`);
+    }
+  });
+
+  test('the label states how many past trips the comparison uses', () => {
+    const html = renderCategoryComparison(currentPerDay, groupPerDay, tripDays, 2);
+    assert.match(html, /과거 여행 2개와 비교/);
+  });
+
+  test('a collapsed help block explains the columns', () => {
+    const html = renderCategoryComparison(currentPerDay, groupPerDay, tripDays, 2);
+    assert.match(html, /<details class="cmp-help">/);
+    assert.match(html, /<summary>이 표 읽는 법<\/summary>/);
+    // The two caveats that are easy to misread must be stated.
+    assert.match(html, /분담 인원/);
+    assert.match(html, /정산/);
+    // It must be closed by default -- no `open` attribute.
+    assert.doesNotMatch(html, /<details class="cmp-help" open>/);
   });
 });
 

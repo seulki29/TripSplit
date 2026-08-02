@@ -31,7 +31,7 @@ function renderDonutChart(categoryTotals) {
     </div>`;
 }
 
-function renderCategoryComparison(currentPerDay, groupPerDay, tripDays) {
+function renderCategoryComparison(currentPerDay, groupPerDay, tripDays, tripsInComparison) {
   const categories = Object.keys(currentPerDay);
   if (categories.length === 0) return '<p class="muted">비교할 수 있는 카테고리가 없습니다.</p>';
 
@@ -58,27 +58,27 @@ function renderCategoryComparison(currentPerDay, groupPerDay, tripDays) {
 
   const body = rows.map((r) => {
     const groupCell = r.group === null
-      ? '<td class="cmp-num mono cmp-group">—</td>'
-      : `<td class="cmp-num mono cmp-group">${r.group.toLocaleString()}</td>`;
+      ? '<td class="cmp-num mono cmp-group" data-field="group">—</td>'
+      : `<td class="cmp-num mono cmp-group" data-field="group">${r.group.toLocaleString()}</td>`;
 
     let cmpCell;
     let deltaCell;
     if (r.pct === null) {
-      cmpCell = '<td class="cmp-num mono">—</td>';
-      deltaCell = '<td class="cmp-num mono">—</td>';
+      cmpCell = '<td class="cmp-num mono" data-field="cmp">—</td>';
+      deltaCell = '<td class="cmp-num mono" data-field="delta">—</td>';
     } else {
       const width = (Math.abs(r.pct) / maxAbsPct) * 50;
       const bar = r.pct === 0 ? '' : `<div class="cmp-bar-fill ${r.pct > 0 ? 'cmp-bar-pos' : 'cmp-bar-neg'}" style="width:${width}%;background:${categoryMark(r.category)}"></div>`;
       const tone = r.pct >= 0 ? 'pay' : 'receive';
       const sign = r.pct >= 0 ? '+' : '';
-      cmpCell = `<td><div class="cmp-cell"><div class="cmp-bar">${bar}</div><span class="cmp-pct mono" style="color:var(--${tone})">${sign}${r.pct}%</span></div></td>`;
-      deltaCell = `<td class="cmp-num mono" style="color:var(--${tone})">${sign}${r.delta.toLocaleString()}원</td>`;
+      cmpCell = `<td data-field="cmp"><div class="cmp-cell"><div class="cmp-bar">${bar}</div><span class="cmp-pct mono" style="color:var(--${tone})">${sign}${r.pct}%</span></div></td>`;
+      deltaCell = `<td class="cmp-num mono" data-field="delta" style="color:var(--${tone})">${sign}${r.delta.toLocaleString()}원</td>`;
     }
 
     return `
-      <tr>
+      <tr class="cmp-row" data-category="${escapeHtml(r.category)}">
         <td class="cmp-cat">${categoryDot(r.category)} ${escapeHtml(r.category)}</td>
-        <td class="cmp-num mono">${r.current.toLocaleString()}</td>
+        <td class="cmp-num mono" data-field="current">${r.current.toLocaleString()}</td>
         ${groupCell}
         ${cmpCell}
         ${deltaCell}
@@ -86,7 +86,8 @@ function renderCategoryComparison(currentPerDay, groupPerDay, tripDays) {
   }).join('');
 
   return `
-    <p class="label" style="margin-bottom:0.4rem">카테고리 비교 · 하루 · 1인 기준</p>
+    <p class="label" style="margin-bottom:0.4rem">카테고리 비교 · 하루 · 1인 기준 · 과거 여행 ${tripsInComparison}개와 비교</p>
+    <p class="muted" style="font-size:12px;margin-bottom:0.4rem">행을 누르면 산출 근거를 볼 수 있습니다.</p>
     <div style="overflow-x:auto">
     <table class="cmp-table">
       <thead><tr>
@@ -98,7 +99,24 @@ function renderCategoryComparison(currentPerDay, groupPerDay, tripDays) {
       </tr></thead>
       <tbody>${body}</tbody>
     </table>
-    </div>`;
+    </div>
+    <details class="cmp-help">
+      <summary>이 표 읽는 법</summary>
+      <dl>
+        <dt>이번</dt>
+        <dd>이 여행에서 이 카테고리에 1인이 하루 평균 얼마나 부담했는지. 확정된 지출만 집계합니다.</dd>
+        <dt>그룹평균</dt>
+        <dd>같은 그룹의 완료된 과거 여행들에서 같은 값을 구해 평균낸 값. 총액을 합쳐 총일수로 나눈 것이 아니라 여행별 하루 비율의 평균이라, 여행 길이가 달라도 긴 여행이 평균을 끌고 가지 않습니다.</dd>
+        <dt>편차</dt>
+        <dd>두 값의 차이를 비율로 나타낸 것. 씀씀이가 평소와 얼마나 다른지 보여줍니다.</dd>
+        <dt>여행 전체</dt>
+        <dd>평소 페이스로 이번 여행 길이만큼 갔다면 나왔을 금액과의 차액입니다. 1인 기준이며, 카테고리끼리 더할 수 있습니다.</dd>
+        <dt>분담 인원에 대해</dt>
+        <dd>1인 평균의 분모는 여행 전체 분담 인원입니다. 특정 카테고리에서 제외된 구성원이 있어도 같은 분모를 쓰므로, 제외가 걸린 카테고리는 실제 참여자 부담보다 낮게 보입니다.</dd>
+        <dt>정산 금액과의 차이</dt>
+        <dd>정산은 가중치대로 나누고 이 지표는 인원수로 균등하게 나눕니다. 가중치가 전원 같으면 두 값이 일치합니다.</dd>
+      </dl>
+    </details>`;
 }
 
 // Per-day figures keep up to two decimals here. The table rounds them to won;
