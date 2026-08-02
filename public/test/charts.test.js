@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderDonutChart, renderCategoryComparison } from '../charts.js';
+import { renderDonutChart, renderCategoryComparison, renderComparisonDetail } from '../charts.js';
 
 // charts.js only imports escapeHtml (pure) from ui.js and helpers from
 // categories.js -- neither touches the DOM at module scope, so this runs as
@@ -138,5 +138,103 @@ describe('charts.js renderDonutChart', () => {
       renderDonutChart({}),
       '<p class="muted">지출 내역이 없습니다.</p>',
     );
+  });
+});
+
+describe('charts.js renderComparisonDetail', () => {
+  // The real 평창 numbers: 식비 2,494,700원 / 7명 / 3일 -> 118,795.2381원/일,
+  // group baseline 49,530원/일 (영월 990,600 / 10명 / 2일).
+  const base = {
+    category: '식비',
+    categoryTotal: 2494700,
+    headcount: 7,
+    tripDays: 3,
+    currentPerDay: 2494700 / 7 / 3,
+    groupPerDay: 49530,
+    tripsInComparison: 1,
+    focus: null,
+  };
+
+  test('shows the 이번 line as total / headcount / days', () => {
+    const html = renderComparisonDetail(base);
+    assert.match(html, /2,494,700원 ÷ 7명 ÷ 3일/);
+    assert.match(html, /118,795\.24원\/일/);
+  });
+
+  test('drops trailing zeros on a whole-number per-day figure', () => {
+    const html = renderComparisonDetail(base);
+    // 49,530 exactly -- must not render as 49,530.00
+    assert.match(html, /49,530원\/일/);
+    assert.doesNotMatch(html, /49,530\.00/);
+  });
+
+  test('percentage and trip-total come from the unrounded difference', () => {
+    const html = renderComparisonDetail(base);
+    // 118,795.2381 - 49,530 = 69,265.2381
+    assert.match(html, /69,265\.24원\/일/);
+    assert.match(html, /\+140%/);
+    // 69,265.2381 x 3 = 207,795.71 -> 207,796.
+    // Hand-computing from the rounded table values gives 207,795, which is the
+    // discrepancy this modal exists to explain -- so 207,795 must NOT appear.
+    assert.match(html, /\+207,796원/);
+    assert.doesNotMatch(html, /207,795원/);
+  });
+
+  test('states the comparison base trip count', () => {
+    assert.match(renderComparisonDetail(base), /과거 완료 여행 1개/);
+  });
+
+  test('carries an interpretation line built from this row\'s own figures', () => {
+    const html = renderComparisonDetail(base);
+    assert.match(html, /148,590원/);  // 49,530 x 3
+    assert.match(html, /356,386원/);  // 118,795.2381 x 3, rounded once
+  });
+
+  test('notes that the table rounds', () => {
+    assert.match(renderComparisonDetail(base), /반올림/);
+  });
+
+  test('a category with no group baseline shows — and explains why', () => {
+    const html = renderComparisonDetail({
+      ...base, category: '놀이', categoryTotal: 210000, groupPerDay: undefined,
+      currentPerDay: 210000 / 7 / 3,
+    });
+    assert.match(html, /210,000원 ÷ 7명 ÷ 3일/);
+    assert.match(html, /—/);
+    assert.match(html, /비교 기준이 없습니다/);
+    // No deviation chain is rendered at all.
+    assert.doesNotMatch(html, /%/);
+  });
+
+  test('treats a zero group baseline as no baseline', () => {
+    const html = renderComparisonDetail({ ...base, groupPerDay: 0 });
+    assert.match(html, /비교 기준이 없습니다/);
+  });
+
+  test('highlights only the focused line', () => {
+    const onDelta = renderComparisonDetail({ ...base, focus: 'delta' });
+    assert.equal((onDelta.match(/cmp-focus/g) || []).length, 1);
+    assert.match(onDelta, /cmp-focus[^>]*>[\s\S]*?여행 전체/);
+
+    const none = renderComparisonDetail({ ...base, focus: null });
+    assert.doesNotMatch(none, /cmp-focus/);
+  });
+
+  test('every focus value maps to a line', () => {
+    for (const focus of ['current', 'group', 'cmp', 'delta']) {
+      const html = renderComparisonDetail({ ...base, focus });
+      assert.equal((html.match(/cmp-focus/g) || []).length, 1, `focus=${focus}`);
+    }
+  });
+
+  test('escapes the category label', () => {
+    const html = renderComparisonDetail({ ...base, category: '<img src=x>' });
+    assert.match(html, /&lt;img src=x&gt;/);
+    assert.doesNotMatch(html, /<img src=x>/);
+  });
+
+  test('omits the division line when headcount is zero', () => {
+    const html = renderComparisonDetail({ ...base, headcount: 0, currentPerDay: 0 });
+    assert.doesNotMatch(html, /÷ 0명/);
   });
 });

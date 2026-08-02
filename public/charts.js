@@ -101,4 +101,57 @@ function renderCategoryComparison(currentPerDay, groupPerDay, tripDays) {
     </div>`;
 }
 
-export { renderDonutChart, renderCategoryComparison };
+// Per-day figures keep up to two decimals here. The table rounds them to won;
+// repeating that rounding inside the modal would break the chain -- hand-adding
+// the rounded values is exactly the 1-won discrepancy this modal explains.
+function perDay(n) {
+  return Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function detailRow(label, value, isFocus) {
+  return `
+    <div class="cmp-detail-row${isFocus ? ' cmp-focus' : ''}">
+      <span class="label">${label}</span>
+      <span class="mono cmp-detail-value">${value}</span>
+    </div>`;
+}
+
+function renderComparisonDetail({
+  category, categoryTotal, headcount, tripDays,
+  currentPerDay, groupPerDay, tripsInComparison, focus,
+}) {
+  const name = escapeHtml(category);
+  const currentValue = headcount > 0
+    ? `${Number(categoryTotal).toLocaleString()}원 ÷ ${headcount}명 ÷ ${tripDays}일 = ${perDay(currentPerDay)}원/일`
+    : `${perDay(currentPerDay)}원/일`;
+
+  const hasGroup = typeof groupPerDay === 'number' && groupPerDay > 0;
+  const header = `<div style="font-size:12px;color:#666;margin-bottom:0.6rem">${name}</div>`;
+  if (!hasGroup) {
+    return `
+      ${header}
+      ${detailRow('이번', currentValue, focus === 'current')}
+      ${detailRow('그룹평균', '—', focus === 'group')}
+      <p class="muted" style="margin-top:0.8rem;font-size:13px">과거 완료 여행에 '${name}' 지출이 없어 비교 기준이 없습니다.</p>`;
+  }
+
+  const diff = currentPerDay - groupPerDay;
+  const pct = Math.round((diff / groupPerDay) * 100);
+  const delta = Math.round(diff * tripDays);
+  const sign = pct >= 0 ? '+' : '';
+  const tone = pct >= 0 ? 'pay' : 'receive';
+
+  return `
+    ${header}
+    ${detailRow('이번', currentValue, focus === 'current')}
+    ${detailRow('그룹평균', `${perDay(groupPerDay)}원/일`, focus === 'group')}
+    <p class="muted" style="margin:0 0 0.2rem 0.5rem;font-size:12px">과거 완료 여행 ${tripsInComparison}개의 하루 비율 평균</p>
+    <div class="cmp-detail-rule"></div>
+    ${detailRow('차이', `${perDay(diff)}원/일`, false)}
+    ${detailRow('편차', `${perDay(diff)} ÷ ${perDay(groupPerDay)} = <strong style="color:var(--${tone})">${sign}${pct}%</strong>`, focus === 'cmp')}
+    ${detailRow('여행 전체', `${perDay(diff)} × ${tripDays}일 = <strong style="color:var(--${tone})">${sign}${delta.toLocaleString()}원</strong>`, focus === 'delta')}
+    <p style="margin-top:0.8rem;font-size:13px">평소 페이스대로였다면 ${tripDays}일간 1인당 ${Math.round(groupPerDay * tripDays).toLocaleString()}원. 이번엔 ${Math.round(currentPerDay * tripDays).toLocaleString()}원 들었습니다.</p>
+    <p class="muted" style="margin-top:0.5rem;font-size:12px">표의 숫자는 원 단위로 반올림해 표시합니다.</p>`;
+}
+
+export { renderDonutChart, renderCategoryComparison, renderComparisonDetail };
