@@ -48,6 +48,11 @@ function renderCategoryComparison(currentPerDay, groupPerDay, tripDays, tripsInC
       group: hasGroup ? Math.round(group) : null,
       pct: hasGroup ? Math.round(((current - group) / group) * 100) : null,
       delta: hasGroup ? Math.round((current - group) * tripDays) : null,
+      // Unrounded, kept only so the row's colour can be derived from the
+      // true sign of the deviation -- a rounded percentage can round to -0
+      // (Math.round(-0.3) === -0, and -0 >= 0 is true), which would recolour
+      // a real negative deviation as positive if we coloured off `pct`.
+      diff: hasGroup ? current - group : null,
     };
   }).sort((a, b) => b.current - a.current);
 
@@ -69,10 +74,15 @@ function renderCategoryComparison(currentPerDay, groupPerDay, tripDays, tripsInC
     } else {
       const width = (Math.abs(r.pct) / maxAbsPct) * 50;
       const bar = r.pct === 0 ? '' : `<div class="cmp-bar-fill ${r.pct > 0 ? 'cmp-bar-pos' : 'cmp-bar-neg'}" style="width:${width}%;background:${categoryMark(r.category)}"></div>`;
-      const tone = r.pct >= 0 ? 'pay' : 'receive';
-      const sign = r.pct >= 0 ? '+' : '';
-      cmpCell = `<td data-field="cmp"><div class="cmp-cell"><div class="cmp-bar">${bar}</div><span class="cmp-pct mono" style="color:var(--${tone})">${sign}${r.pct}%</span></div></td>`;
-      deltaCell = `<td class="cmp-num mono" data-field="delta" style="color:var(--${tone})">${sign}${r.delta.toLocaleString()}원</td>`;
+      // tone comes from the unrounded diff (see comment on the `diff` field
+      // above); each sign comes from its own printed value, not a shared
+      // sign derived from `pct` -- otherwise a percentage that rounds to -0
+      // paints its "+" onto a genuinely negative won amount.
+      const tone = r.diff > 0 ? 'pay' : 'receive';
+      const pctSign = r.pct > 0 ? '+' : '';
+      const deltaSign = r.delta > 0 ? '+' : '';
+      cmpCell = `<td data-field="cmp"><div class="cmp-cell"><div class="cmp-bar">${bar}</div><span class="cmp-pct mono" style="color:var(--${tone})">${pctSign}${r.pct}%</span></div></td>`;
+      deltaCell = `<td class="cmp-num mono" data-field="delta" style="color:var(--${tone})">${deltaSign}${r.delta.toLocaleString()}원</td>`;
     }
 
     return `
@@ -139,15 +149,22 @@ function renderComparisonDetail({
   currentPerDay, groupPerDay, tripsInComparison, focus,
 }) {
   const name = escapeHtml(category);
-  const currentValue = headcount > 0
+  // The division form is only truthful when the numerator actually
+  // reconciles with currentPerDay. currentPerDay comes from server-side
+  // allocations (categoryDue), while categoryTotal sums raw expense amounts
+  // -- these diverge when an expense excludes every member (allocateInteger
+  // returns [] for a zero eligible-weight sum), so categoryTotal can include
+  // money that never became an allocation. When they don't reconcile, fall
+  // back to the result-only form rather than print a false equation.
+  const reconciles = headcount > 0
+    && Math.abs((categoryTotal / headcount / tripDays) - currentPerDay) <= 0.005;
+  const currentValue = reconciles
     ? `${Number(categoryTotal).toLocaleString()}원 ÷ ${headcount}명 ÷ ${tripDays}일 = ${perDay(currentPerDay)}원/일`
     : `${perDay(currentPerDay)}원/일`;
 
   const hasGroup = typeof groupPerDay === 'number' && groupPerDay > 0;
-  const header = `<div style="font-size:12px;color:#666;margin-bottom:0.6rem">${name}</div>`;
   if (!hasGroup) {
     return `
-      ${header}
       ${detailRow('이번', currentValue, focus === 'current')}
       ${detailRow('그룹평균', '—', focus === 'group')}
       <p class="muted" style="margin-top:0.8rem;font-size:13px">과거 완료 여행에 '${name}' 지출이 없어 비교 기준이 없습니다.</p>`;
@@ -156,18 +173,21 @@ function renderComparisonDetail({
   const diff = currentPerDay - groupPerDay;
   const pct = Math.round((diff / groupPerDay) * 100);
   const delta = Math.round(diff * tripDays);
-  const sign = pct >= 0 ? '+' : '';
-  const tone = pct >= 0 ? 'pay' : 'receive';
+  // tone from the unrounded diff, each sign from its own value -- see the
+  // matching comment in renderCategoryComparison for why a shared sign
+  // derived from `pct` is wrong when pct rounds to -0.
+  const tone = diff > 0 ? 'pay' : 'receive';
+  const pctSign = pct > 0 ? '+' : '';
+  const deltaSign = delta > 0 ? '+' : '';
 
   return `
-    ${header}
     ${detailRow('이번', currentValue, focus === 'current')}
     ${detailRow('그룹평균', `${perDay(groupPerDay)}원/일`, focus === 'group')}
     <p class="muted" style="margin:0 0 0.2rem 0.5rem;font-size:12px">과거 완료 여행 ${tripsInComparison}개의 하루 비율 평균</p>
     <div class="cmp-detail-rule"></div>
     ${detailRow('차이', `${perDay(diff)}원/일`, false)}
-    ${detailRow('편차', `${perDay(diff)} ÷ ${perDay(groupPerDay)} = <strong style="color:var(--${tone})">${sign}${pct}%</strong>`, focus === 'cmp')}
-    ${detailRow('여행 전체', `${perDay(diff)} × ${tripDays}일 = <strong style="color:var(--${tone})">${sign}${delta.toLocaleString()}원</strong>`, focus === 'delta')}
+    ${detailRow('편차', `${perDay(diff)} ÷ ${perDay(groupPerDay)} = <strong style="color:var(--${tone})">${pctSign}${pct}%</strong>`, focus === 'cmp')}
+    ${detailRow('여행 전체', `${perDay(diff)} × ${tripDays}일 = <strong style="color:var(--${tone})">${deltaSign}${delta.toLocaleString()}원</strong>`, focus === 'delta')}
     <p style="margin-top:0.8rem;font-size:13px">평소 페이스대로였다면 ${tripDays}일간 1인당 ${Math.round(groupPerDay * tripDays).toLocaleString()}원. 이번엔 ${Math.round(currentPerDay * tripDays).toLocaleString()}원 들었습니다.</p>
     <p class="muted" style="margin-top:0.5rem;font-size:12px">표의 숫자는 원 단위로 반올림해 표시합니다.</p>`;
 }

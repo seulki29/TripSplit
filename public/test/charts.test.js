@@ -25,6 +25,14 @@ function rowFor(html, category) {
   return bodyRows(html).find((row) => row.includes(category));
 }
 
+// Isolates the "이번" detail-row's value span so assertions about its
+// division form (or lack of one) don't get polluted by the "÷" that also
+// appears in the unrelated 편차 row when a group baseline is present.
+function currentLineValue(html) {
+  const match = html.match(/<span class="label">이번<\/span>\s*<span class="mono cmp-detail-value">([\s\S]*?)<\/span>/);
+  return match ? match[1] : null;
+}
+
 describe('charts.js renderCategoryComparison', () => {
   // Mirrors the design spec's own worked example (§5.2): 숙박 +20%/+21,000원,
   // 식비 -10%/-9,000원, 장보기 +13%/+3,000원, 교통비 -33%/-18,000원.
@@ -158,6 +166,22 @@ describe('charts.js renderCategoryComparison', () => {
     assert.match(html, /과거 여행 2개와 비교/);
   });
 
+  test('a deviation that rounds to zero percent is still signed and coloured by its true direction (group 100,000 / current 99,700 / 3 days)', () => {
+    // Math.round(-0.3) is -0, and -0 >= 0 is true -- a sign/tone derived
+    // from the rounded percentage would misfire here. The true difference
+    // is negative (-300/day), so both the tone and the trip-total figure
+    // must read negative, and never as a double sign "+-900원".
+    const html = renderCategoryComparison({ 식비: 99700 }, { 식비: 100000 }, 3);
+    const row = rowFor(html, '식비');
+    assert.match(row, />0%</); // rounds to zero, no sign either way
+    assert.doesNotMatch(row, /\+0%/);
+    assert.doesNotMatch(row, /-0%/);
+    assert.match(row, />-900원</);
+    assert.doesNotMatch(row, /\+-900원/);
+    assert.doesNotMatch(row, /\+900원/);
+    assert.match(row, /color:var\(--receive\)/);
+  });
+
   test('a collapsed help block explains the columns', () => {
     const html = renderCategoryComparison(currentPerDay, groupPerDay, tripDays, 2);
     assert.match(html, /<details class="cmp-help">/);
@@ -270,7 +294,11 @@ describe('charts.js renderComparisonDetail', () => {
   });
 
   test('escapes the category label', () => {
-    const html = renderComparisonDetail({ ...base, category: '<img src=x>' });
+    // groupPerDay: undefined forces the no-baseline branch, the only one
+    // that still interpolates the category name into rendered output --
+    // the modal's header (which used to carry it unconditionally) was
+    // removed as a duplicate of the modal title report.js already sets.
+    const html = renderComparisonDetail({ ...base, category: '<img src=x>', groupPerDay: undefined });
     assert.match(html, /&lt;img src=x&gt;/);
     assert.doesNotMatch(html, /<img src=x>/);
   });
@@ -278,5 +306,57 @@ describe('charts.js renderComparisonDetail', () => {
   test('omits the division line when headcount is zero', () => {
     const html = renderComparisonDetail({ ...base, headcount: 0, currentPerDay: 0 });
     assert.doesNotMatch(html, /÷ 0명/);
+  });
+
+  test('falls back to the result-only 이번 form when categoryTotal/headcount/tripDays does not reconcile with currentPerDay', () => {
+    // categoryTotal here includes an expense that excluded every member
+    // (300,000 split 3 ways + 60,000 with all 3 excluded = 360,000 total),
+    // so categoryDue-derived currentPerDay (300,000/3/2 = 50,000) legitimately
+    // disagrees with categoryTotal/headcount/tripDays (360,000/3/2 = 60,000).
+    // Printing "360,000원 ÷ 3명 ÷ 2일 = 50,000원/일" would be arithmetically
+    // false, so the division form must be dropped for the result-only one.
+    const html = renderComparisonDetail({
+      ...base, categoryTotal: 360000, headcount: 3, tripDays: 2, currentPerDay: 50000,
+    });
+    const line = currentLineValue(html);
+    assert.equal(line, '50,000원/일');
+    assert.doesNotMatch(line, /÷/);
+  });
+
+  test('still renders the division form when the numerator does reconcile (within 0.005)', () => {
+    const html = renderComparisonDetail({
+      ...base, categoryTotal: 360000, headcount: 3, tripDays: 2, currentPerDay: 60000,
+    });
+    const line = currentLineValue(html);
+    assert.match(line, /360,000원 ÷ 3명 ÷ 2일 = 60,000원\/일/);
+  });
+
+  test('group 100,000 / current 99,700 / 3 days: 편차 rounds to zero but 여행 전체 stays negative, never double-signed', () => {
+    // Same -0 rounding trap as the table: Math.round(-0.3) is -0, and
+    // -0 >= 0 is true, so a sign derived from the rounded percentage would
+    // wrongly stamp "+" onto the negative 여행 전체 value.
+    const html = renderComparisonDetail({
+      ...base, groupPerDay: 100000, currentPerDay: 99700, tripDays: 3,
+    });
+    assert.doesNotMatch(html, /\+-900원/);
+    assert.doesNotMatch(html, /\+900원/);
+    assert.match(html, /-900원/);
+    assert.doesNotMatch(html, /\+0%/);
+    assert.doesNotMatch(html, /-0%/);
+  });
+
+  test('a negative deviation (current < group) never carries a + sign anywhere (group 60,000 / current 53,333.33.. / 2 days)', () => {
+    const html = renderComparisonDetail({
+      ...base,
+      groupPerDay: 60000,
+      currentPerDay: 160000 / 3, // 53,333.333...
+      tripDays: 2,
+    });
+    assert.match(html, /-6,666\.67원\/일/);
+    assert.match(html, /-11%/);
+    assert.match(html, /-13,333원/);
+    assert.doesNotMatch(html, /\+6,666\.67원\/일/);
+    assert.doesNotMatch(html, /\+11%/);
+    assert.doesNotMatch(html, /\+13,333원/);
   });
 });
