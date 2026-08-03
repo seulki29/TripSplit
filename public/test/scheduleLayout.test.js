@@ -272,4 +272,13 @@ describe('groupByDate', () => {
     const result = groupByDate(entries, period);
     assert.deepEqual(result.byDate['2026-08-01'].timed.map((x) => x.id), ['early', 'late']);
   });
+
+  // updateTripSetup stores `period` with no validation, so a mistyped year
+  // could otherwise ask eachDate to walk tens of thousands of days -- a hard
+  // browser hang. The walk must stay bounded even for a bogus multi-year period.
+  test('여러 해에 걸친 기간도 날짜 목록이 무한정 커지지 않는다', () => {
+    const badPeriod = { start: '2026-08-01', end: '2126-08-02' };
+    const result = groupByDate([], badPeriod);
+    assert.ok(result.dates.length < 1000, `expected a bounded date list, got ${result.dates.length}`);
+  });
 });
