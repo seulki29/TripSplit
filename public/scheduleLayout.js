@@ -77,4 +77,73 @@ function assignLanes(entries) {
   return result;
 }
 
-export { minToLabel, labelToMin, mapLinkFor, assignLanes };
+// 축의 기본 범위는 08:00-22:00이다. 00-24시를 다 그리면 새벽이 텅 빈 채
+// 스크롤만 길어진다. 이 범위를 벗어나는 일정이 있으면 그만큼만 넓힌다.
+const MIN_FROM = 480;   // 08:00
+const MIN_TO = 1320;    // 22:00
+const PX_PER_MIN = 0.8; // 1시간 = 48px
+
+function timeRangeFor(entries) {
+  const timed = entries.filter((x) => typeof x.startMin === 'number');
+  if (timed.length === 0) return { fromMin: MIN_FROM, toMin: MIN_TO };
+
+  const earliest = Math.min(...timed.map((x) => x.startMin));
+  const latest = Math.max(...timed.map((x) => x.endMin));
+
+  return {
+    fromMin: Math.min(MIN_FROM, Math.floor(earliest / 60) * 60),
+    toMin: Math.max(MIN_TO, Math.ceil(latest / 60) * 60),
+  };
+}
+
+// YYYY-MM-DD 문자열을 하루씩 늘린다. Date 객체를 쓰면 타임존에 따라 하루가
+// 밀릴 수 있어서 UTC로 고정해 계산한다.
+function eachDate(start, end) {
+  const out = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime())) return out;
+  while (cursor <= last) {
+    out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return out;
+}
+
+/**
+ * 날짜 목록은 여행 기간과 일정에 실제로 등장하는 날짜의 합집합이다.
+ * 관리자가 나중에 기간을 좁혔을 때 기간 밖으로 밀려난 일정이 화면에서
+ * 사라지면 안 된다 — 데이터는 남아 있는데 보이지 않는 상태가 최악이다.
+ */
+function groupByDate(entries, period) {
+  const dateSet = new Set();
+  if (period?.start && period?.end) {
+    for (const d of eachDate(period.start, period.end)) dateSet.add(d);
+  }
+  for (const entry of entries) {
+    if (entry.date) dateSet.add(entry.date);
+  }
+
+  const dates = [...dateSet].sort();
+  const byDate = {};
+  for (const d of dates) byDate[d] = { timed: [], untimed: [] };
+
+  const floating = [];
+  for (const entry of entries) {
+    if (!entry.date) { floating.push(entry); continue; }
+    const bucket = byDate[entry.date];
+    if (typeof entry.startMin === 'number') bucket.timed.push(entry);
+    else bucket.untimed.push(entry);
+  }
+
+  for (const d of dates) {
+    byDate[d].timed.sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin);
+  }
+
+  return { dates, byDate, floating };
+}
+
+export {
+  MIN_FROM, MIN_TO, PX_PER_MIN,
+  minToLabel, labelToMin, mapLinkFor, assignLanes, timeRangeFor, groupByDate,
+};

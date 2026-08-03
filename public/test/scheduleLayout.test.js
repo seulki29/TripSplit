@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { minToLabel, labelToMin, mapLinkFor, assignLanes } from '../scheduleLayout.js';
+import { minToLabel, labelToMin, mapLinkFor, assignLanes, timeRangeFor, groupByDate } from '../scheduleLayout.js';
 
 describe('minToLabel', () => {
   test('자정 기준 분을 HH:MM으로 바꾼다', () => {
@@ -168,5 +168,108 @@ describe('assignLanes', () => {
     const result = assignLanes([e('short', 600, 630), e('long', 600, 720)]);
     assert.equal(laneOf(result, 'long').lane, 0);
     assert.equal(laneOf(result, 'short').lane, 1);
+  });
+});
+
+describe('timeRangeFor', () => {
+  test('시간이 있는 일정이 없으면 08:00-22:00', () => {
+    assert.deepEqual(timeRangeFor([]), { fromMin: 480, toMin: 1320 });
+    assert.deepEqual(
+      timeRangeFor([{ startMin: null, endMin: null }]),
+      { fromMin: 480, toMin: 1320 },
+    );
+  });
+
+  test('기본 범위 안에 드는 일정만 있으면 범위가 그대로', () => {
+    assert.deepEqual(timeRangeFor([e('a', 600, 720)]), { fromMin: 480, toMin: 1320 });
+  });
+
+  test('이른 일정이 있으면 아래로 시간 단위 내림', () => {
+    // 06:30 시작 -> 06:00
+    assert.equal(timeRangeFor([e('a', 390, 500)]).fromMin, 360);
+  });
+
+  test('늦은 일정이 있으면 위로 시간 단위 올림', () => {
+    // 23:45 종료 -> 24:00
+    assert.equal(timeRangeFor([e('a', 1300, 1425)]).toMin, 1440);
+  });
+
+  test('정각에 끝나면 더 올리지 않는다', () => {
+    assert.equal(timeRangeFor([e('a', 1300, 1380)]).toMin, 1380);
+  });
+
+  test('시간이 null인 항목은 계산에서 빠진다', () => {
+    const result = timeRangeFor([e('a', 600, 720), { startMin: null, endMin: null }]);
+    assert.deepEqual(result, { fromMin: 480, toMin: 1320 });
+  });
+});
+
+describe('groupByDate', () => {
+  const period = { start: '2026-08-01', end: '2026-08-03' };
+
+  test('기간의 모든 날짜를 일정이 없어도 낸다', () => {
+    const result = groupByDate([], period);
+    assert.deepEqual(result.dates, ['2026-08-01', '2026-08-02', '2026-08-03']);
+  });
+
+  test('시간이 있는 일정은 timed 버킷', () => {
+    const entry = { id: 'a', date: '2026-08-02', startMin: 600, endMin: 720 };
+    const result = groupByDate([entry], period);
+    assert.deepEqual(result.byDate['2026-08-02'].timed, [entry]);
+    assert.deepEqual(result.byDate['2026-08-02'].untimed, []);
+  });
+
+  test('날짜만 있고 시간이 없으면 untimed 버킷', () => {
+    const entry = { id: 'a', date: '2026-08-02', startMin: null, endMin: null };
+    const result = groupByDate([entry], period);
+    assert.deepEqual(result.byDate['2026-08-02'].untimed, [entry]);
+    assert.deepEqual(result.byDate['2026-08-02'].timed, []);
+  });
+
+  test('날짜가 없으면 floating', () => {
+    const entry = { id: 'a', date: null, startMin: null, endMin: null };
+    const result = groupByDate([entry], period);
+    assert.deepEqual(result.floating, [entry]);
+  });
+
+  // 관리자가 기간을 좁혔을 때 기간 밖으로 밀려난 일정이 화면에서 사라지면
+  // 안 된다. 데이터는 남아 있는데 보이지 않는 상태가 최악이다.
+  test('기간 밖 날짜의 일정도 날짜 목록에 넣는다', () => {
+    const entry = { id: 'a', date: '2026-08-09', startMin: 600, endMin: 720 };
+    const result = groupByDate([entry], period);
+    assert.ok(result.dates.includes('2026-08-09'));
+    assert.deepEqual(result.byDate['2026-08-09'].timed, [entry]);
+  });
+
+  test('날짜 목록은 정렬되어 있다', () => {
+    const entries = [
+      { id: 'a', date: '2026-07-30', startMin: 600, endMin: 720 },
+      { id: 'b', date: '2026-08-09', startMin: 600, endMin: 720 },
+    ];
+    const result = groupByDate(entries, period);
+    assert.deepEqual(result.dates, [
+      '2026-07-30', '2026-08-01', '2026-08-02', '2026-08-03', '2026-08-09',
+    ]);
+  });
+
+  test('기간이 비어도 일정 날짜만으로 동작한다', () => {
+    const entry = { id: 'a', date: '2026-08-02', startMin: 600, endMin: 720 };
+    assert.deepEqual(groupByDate([entry], null).dates, ['2026-08-02']);
+    assert.deepEqual(groupByDate([entry], { start: null, end: null }).dates, ['2026-08-02']);
+  });
+
+  test('기간도 일정도 없으면 날짜 목록이 비어 있다', () => {
+    const result = groupByDate([], null);
+    assert.deepEqual(result.dates, []);
+    assert.deepEqual(result.floating, []);
+  });
+
+  test('timed 버킷은 startMin 순으로 정렬된다', () => {
+    const entries = [
+      { id: 'late', date: '2026-08-01', startMin: 700, endMin: 760 },
+      { id: 'early', date: '2026-08-01', startMin: 600, endMin: 660 },
+    ];
+    const result = groupByDate(entries, period);
+    assert.deepEqual(result.byDate['2026-08-01'].timed.map((x) => x.id), ['early', 'late']);
   });
 });
