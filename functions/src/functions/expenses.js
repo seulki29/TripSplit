@@ -1,6 +1,7 @@
 const { requireSession } = require('../lib/sessions');
 const { requireTripEditable } = require('../lib/tripStatus');
 const { CATEGORIES } = require('../lib/categories');
+const { assertMemberIdsExist } = require('../lib/memberIds');
 
 const PHOTO_PATH_SUFFIX_RE = /^[0-9a-f]{32}\.(jpg|png)$/;
 
@@ -16,14 +17,6 @@ function isValidPhotoPath(tripId, photoPath) {
   const prefix = `receipts/${tripId}/`;
   if (!photoPath.startsWith(prefix)) return false;
   return PHOTO_PATH_SUFFIX_RE.test(photoPath.slice(prefix.length));
-}
-
-async function validateMemberIds(db, tripId, ids) {
-  if (!Array.isArray(ids)) throw new Error('INVALID_EXCLUDED_MEMBERS');
-  if (ids.length === 0) return;
-  const membersRef = db.collection('trips').doc(tripId).collection('members');
-  const snaps = await Promise.all(ids.map((id) => membersRef.doc(id).get()));
-  if (snaps.some((s) => !s.exists)) throw new Error('INVALID_EXCLUDED_MEMBERS');
 }
 
 async function listExpenses(db, data) {
@@ -44,7 +37,7 @@ async function addExpense(db, data) {
   if (photoPath && !isValidPhotoPath(tripId, photoPath)) throw new Error('INVALID_PHOTO_PATH');
 
   const excludedMembers = data.excludedMembers || [];
-  await validateMemberIds(db, tripId, excludedMembers);
+  await assertMemberIdsExist(db, tripId, excludedMembers, 'INVALID_EXCLUDED_MEMBERS');
 
   let enteredBy;
   if (session.role === 'member') {
@@ -110,7 +103,7 @@ async function updateExpense(db, data) {
     update.photoPath = patch.photoPath;
   }
   if ('excludedMembers' in patch) {
-    await validateMemberIds(db, tripId, patch.excludedMembers);
+    await assertMemberIdsExist(db, tripId, patch.excludedMembers, 'INVALID_EXCLUDED_MEMBERS');
     update.excludedMembers = patch.excludedMembers;
   }
 
@@ -166,7 +159,7 @@ async function setExpenseExclusions(db, data) {
   await requireTripEditable(db, tripId);
 
   if (!Array.isArray(expenseIds)) throw new Error('EXPENSE_NOT_FOUND');
-  await validateMemberIds(db, tripId, excludedMemberIds);
+  await assertMemberIdsExist(db, tripId, excludedMemberIds, 'INVALID_EXCLUDED_MEMBERS');
 
   const expensesRef = db.collection('trips').doc(tripId).collection('expenses');
   const snaps = await Promise.all(expenseIds.map((id) => expensesRef.doc(id).get()));
