@@ -28,6 +28,7 @@ const expenses = require('./src/functions/expenses');
 const receipts = require('./src/functions/receipts');
 const tripPhotos = require('./src/functions/tripPhotos');
 const report = require('./src/functions/report');
+const schedules = require('./src/functions/schedules');
 
 function wrap(handler) {
   return async (request) => {
@@ -101,3 +102,8 @@ exports.listTripPhotos = onCall(wrapWithBucket(tripPhotos.listTripPhotos));
 exports.deleteTripPhoto = onCall(wrapWithBucket(tripPhotos.deleteTripPhoto));
 
 exports.getReportData = onCall(wrap(report.getReportData));
+
+exports.listSchedules = onCall(wrap(schedules.listSchedules));
+exports.addSchedule = onCall(wrap(schedules.addSchedule));
+exports.updateSchedule = onCall(wrap(schedules.updateSchedule));
+exports.deleteSchedule = onCall(wrap(schedules.deleteSchedule));
