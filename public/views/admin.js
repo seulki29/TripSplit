@@ -2,6 +2,7 @@ import { callFunction, logout } from '../api.js';
 import { getSession } from '../session.js';
 import { openModal, closeModal, showToast, renderChipGroup, escapeHtml, fileToBase64 } from '../ui.js';
 import { renderReportInto } from './report.js';
+import { renderScheduleInto } from './schedule.js';
 import { formatDate } from '../format.js';
 import { CATEGORIES, categoryTag, categoryMark } from '../categories.js';
 
@@ -32,6 +33,7 @@ function render(root, slug) {
         <button type="button" class="tab ${currentTab === 'setup' ? 'active' : ''}" data-tab="setup">여행정보</button>
         <button type="button" class="tab ${currentTab === 'members' ? 'active' : ''}" data-tab="members">구성원</button>
         <button type="button" class="tab ${currentTab === 'expenses' ? 'active' : ''}" data-tab="expenses">경비확인</button>
+        <button type="button" class="tab ${currentTab === 'schedule' ? 'active' : ''}" data-tab="schedule">일정</button>
         <button type="button" class="tab ${currentTab === 'report' ? 'active' : ''}" data-tab="report">리포트</button>
       </div>
       <div id="admin-tab-body"></div>
@@ -50,6 +52,7 @@ function render(root, slug) {
   body.innerHTML = '<p class="muted">불러오는 중...</p>';
   if (currentTab === 'setup') renderSetupTab(body, slug, myToken);
   else if (currentTab === 'members') renderMembersTab(body, slug, myToken);
+  else if (currentTab === 'schedule') renderScheduleInto(body, slug);
   else if (currentTab === 'report') renderReportInto(body, slug);
   else renderExpensesTab(body, slug, myToken);
 }
