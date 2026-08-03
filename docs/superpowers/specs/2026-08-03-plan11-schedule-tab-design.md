@@ -52,8 +52,24 @@
 
 **기본 안의 문서 ID는 `default`로 고정한다.** 자동 ID가 아니다. 이유는 두 가지다.
 
-1. **마이그레이션이 필요 없다.** 기존 여행들에 미리 plan 문서를 만들어둘 필요 없이, 일정 탭에 처음 들어올 때 `set({...}, { merge: true })`로 만든다.
+1. **마이그레이션이 필요 없다.** 기존 여행들에 미리 plan 문서를 만들어둘 필요 없이, 일정 탭에 처음 들어올 때 만든다.
 2. **동시 생성이 안전하다.** 여러 명이 같은 순간에 탭을 열어도 문서 ID가 같으므로 중복이 생기지 않는다. 자동 ID였다면 `plans` 컬렉션에 빈 안이 여러 개 쌓인다.
+
+**생성은 읽어보고 없을 때만 한다 — `set(..., { merge: true })`를 쓰지 않는다.**
+
+```js
+const ref = db.collection('trips').doc(tripId).collection('plans').doc('default');
+const snap = await ref.get();
+if (!snap.exists) await ref.set({ name: '1안', isActive: true, ... });
+```
+
+`merge: true`는 *넘기지 않은* 필드만 보존한다. 넘긴 필드는 그대로 덮어쓴다. 따라서 `listSchedules`가 매번 `set(merge:true)`를 호출하면 탭을 열 때마다 `createdAt`이 갱신되고, 후속 단계에서 안 이름을 바꿔도 다음 조회에서 `'1안'`으로 되돌아간다.
+
+남는 경합은 두 명이 동시에 첫 진입해 둘 다 `!exists`를 보고 둘 다 쓰는 경우인데, **문서 ID가 고정이라 중복 문서가 생기지 않고 `createdAt`이 밀리초 단위로 달라질 뿐**이라 무해하다. 트랜잭션을 쓸 이유가 없다.
+
+주의: `functions/test/helpers/fakeFirestore.js`의 `FakeDocRef.set()`은 옵션 인자를 무시하고 항상 통째로 덮어쓴다. merge 동작에 의존하는 코드는 테스트에서 통과하고 운영에서 어긋난다.
+
+지연 생성은 **여행 상태와 무관하게 동작한다.** 완료된 여행에서도 `listSchedules`는 성공해야 하고, 이 문서는 사용자가 쓴 내용이 아니라 내부 컨테이너라 `requireTripEditable`의 대상이 아니다.
 
 후속 단계의 안 UI는 이 컬렉션에 문서를 더 추가하고 `isActive`를 옮기는 것뿐이라, 스키마 변경이 없다.
 
