@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWaypoints } from '../routeMap.js';
+import { buildWaypoints, serpentineLayout, NODE_R } from '../routeMap.js';
 
 function sched(over = {}) {
   return {
@@ -120,5 +120,68 @@ describe('buildWaypoints', () => {
       [exp({ merchant: '편의점' })],
     );
     assert.deepEqual(labels(ws), ['조식', '기념품', '편의점']);
+  });
+});
+
+// n개의 더미 경유지. 좌표만 검사하므로 라벨 내용은 중요하지 않다.
+function waypoints(n) {
+  return Array.from({ length: n }, (_, i) => ({
+    label: `P${i}`, category: '기타', date: '2026-08-11',
+  }));
+}
+
+describe('serpentineLayout', () => {
+  test('경유지가 없으면 노드도 없다', () => {
+    const { nodes } = serpentineLayout([]);
+    assert.deepEqual(nodes, []);
+  });
+
+  test('캔버스 폭은 300으로 고정', () => {
+    assert.equal(serpentineLayout(waypoints(5)).width, 300);
+  });
+
+  test('0행은 좌에서 우로', () => {
+    const { nodes } = serpentineLayout(waypoints(3));
+    assert.deepEqual(nodes.map((n) => n.cx), [50, 150, 250]);
+    assert.deepEqual(nodes.map((n) => n.cy), [45, 45, 45]);
+  });
+
+  // 지그재그의 핵심. 1행은 방향이 뒤집혀 오른쪽 끝에서 시작한다.
+  test('1행은 우에서 좌로', () => {
+    const { nodes } = serpentineLayout(waypoints(6));
+    assert.deepEqual(nodes.slice(3).map((n) => n.cx), [250, 150, 50]);
+    assert.deepEqual(nodes.slice(3).map((n) => n.cy), [135, 135, 135]);
+  });
+
+  test('4번째 노드는 1행 오른쪽 끝, 3번째 바로 아래', () => {
+    const { nodes } = serpentineLayout(waypoints(4));
+    assert.equal(nodes[3].cx, 250);
+    assert.equal(nodes[2].cx, 250);
+    assert.equal(nodes[3].row, 1);
+  });
+
+  test('7번째 노드는 2행 왼쪽 끝, 6번째 바로 아래', () => {
+    const { nodes } = serpentineLayout(waypoints(7));
+    assert.equal(nodes[6].cx, 50);
+    assert.equal(nodes[5].cx, 50);
+    assert.equal(nodes[6].cy, 225);
+  });
+
+  test('높이는 행 수에 비례한다', () => {
+    assert.equal(serpentineLayout(waypoints(1)).height, 110);
+    assert.equal(serpentineLayout(waypoints(3)).height, 110);
+    assert.equal(serpentineLayout(waypoints(4)).height, 200);
+    assert.equal(serpentineLayout(waypoints(7)).height, 290);
+  });
+
+  test('노드가 원래 경유지와 인덱스를 들고 있다', () => {
+    const ws = waypoints(2);
+    const { nodes } = serpentineLayout(ws);
+    assert.equal(nodes[1].waypoint, ws[1]);
+    assert.equal(nodes[1].index, 1);
+  });
+
+  test('NODE_R을 export한다', () => {
+    assert.equal(NODE_R, 14);
   });
 });

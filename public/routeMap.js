@@ -47,4 +47,38 @@ function buildWaypoints(schedules, expenses) {
   return out;
 }
 
-export { buildWaypoints };
+// Layout is a boustrophedon: rows alternate direction, so consecutive nodes
+// are always adjacent. Because a row change keeps the same column slot, the
+// connector between rows is a plain vertical line.
+const PER_ROW = 3;
+const CELL_W = 100;
+const ROW_H = 90;
+const NODE_R = 14;
+const CANVAS_W = 300;
+
+// Rows per row count is fixed rather than responsive: the SVG is drawn in a
+// viewBox and stretched with width:100%, so cells shrink on a phone and grow
+// on a desktop without this function ever knowing the viewport.
+function serpentineLayout(waypoints) {
+  const nodes = waypoints.map((waypoint, index) => {
+    const row = Math.floor(index / PER_ROW);
+    const col = index % PER_ROW;
+    const slot = row % 2 === 0 ? col : PER_ROW - 1 - col;
+    return {
+      waypoint,
+      index,
+      row,
+      col,
+      cx: CELL_W / 2 + slot * CELL_W,
+      cy: ROW_H / 2 + row * ROW_H,
+    };
+  });
+
+  const rows = Math.ceil(waypoints.length / PER_ROW);
+  return { nodes, width: CANVAS_W, height: rows * ROW_H + 20 };
+}
+
+export {
+  buildWaypoints, serpentineLayout,
+  PER_ROW, CELL_W, ROW_H, NODE_R, CANVAS_W,
+};
