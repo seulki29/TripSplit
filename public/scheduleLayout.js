@@ -29,4 +29,52 @@ function mapLinkFor(placeName) {
   return `https://map.kakao.com/?q=${encodeURIComponent(s)}`;
 }
 
-export { minToLabel, labelToMin, mapLinkFor };
+/**
+ * 겹치는 일정을 나란한 레인에 배치한다.
+ *
+ * laneCount를 "클러스터"(서로 이어져 겹치는 무리) 단위로 세는 것이 핵심이다.
+ * 하루 전체의 최대 레인 수로 폭을 나누면, 오후에 3개가 겹쳤다는 이유만으로
+ * 아침의 단독 일정까지 1/3 폭이 된다.
+ *
+ * 반환값의 lane/laneCount로 left = lane / laneCount, width = 1 / laneCount
+ * (비율)를 구한다.
+ */
+function assignLanes(entries) {
+  const sorted = [...entries].sort((a, b) => (
+    a.startMin - b.startMin || b.endMin - a.endMin
+  ));
+
+  const result = [];
+  let cluster = [];      // 이번 클러스터의 결과 항목들
+  let clusterEnd = -1;   // 클러스터에 속한 일정들의 최대 endMin
+  let lanes = [];        // 레인별 마지막 endMin
+
+  function flushCluster() {
+    for (const item of cluster) item.laneCount = lanes.length;
+    result.push(...cluster);
+    cluster = [];
+    lanes = [];
+    clusterEnd = -1;
+  }
+
+  for (const entry of sorted) {
+    // 진행 중인 클러스터의 어느 일정과도 겹치지 않으면 새 클러스터를 연다.
+    if (cluster.length > 0 && entry.startMin >= clusterEnd) flushCluster();
+
+    let lane = lanes.findIndex((lastEnd) => lastEnd <= entry.startMin);
+    if (lane === -1) {
+      lane = lanes.length;
+      lanes.push(entry.endMin);
+    } else {
+      lanes[lane] = entry.endMin;
+    }
+
+    cluster.push({ entry, lane, laneCount: 0 });
+    clusterEnd = Math.max(clusterEnd, entry.endMin);
+  }
+  if (cluster.length > 0) flushCluster();
+
+  return result;
+}
+
+export { minToLabel, labelToMin, mapLinkFor, assignLanes };
