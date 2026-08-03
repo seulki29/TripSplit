@@ -262,3 +262,102 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 }
 .cmp-help dt { font-weight: 500; font-size: 12px; margin-top: 0.6rem; }
 .cmp-help dd { margin: 0.15rem 0 0; color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+
+/* ---- Schedule timetable ---- */
+.tt-week { overflow-x: auto; }
+.tt-week-head, .tt-week-untimed, .tt-week-body { display: flex; min-width: min-content; }
+.tt-gutter-head { flex: 0 0 44px; }
+.tt-day-head {
+  flex: 1 0 72px; text-align: center; font-size: 12px; font-weight: 600;
+  padding: 0.4rem 0; border-bottom: 1px solid #e5e3dd;
+}
+.tt-week-body .tt-col { flex: 1 0 72px; }
+.tt-week-untimed .tt-untimed { flex: 1 0 72px; }
+
+.tt-gutter { flex: 0 0 44px; }
+.tt-hour {
+  font-size: 11px; color: #8a857c; text-align: right; padding-right: 4px;
+  border-top: 1px solid #eeece6; box-sizing: border-box;
+}
+.tt-col {
+  position: relative; flex: 1; border-left: 1px solid #eeece6;
+  background-image: repeating-linear-gradient(
+    to bottom, #f5f3ee 0 1px, transparent 1px 48px);
+}
+.tt-single { display: flex; }
+
+.tt-block {
+  position: absolute; overflow: hidden; text-align: left; cursor: pointer;
+  border: 0; border-left: 3px solid var(--cat, #999); border-radius: 3px;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  padding: 2px 4px; font: inherit; font-size: 11px; line-height: 1.25;
+  display: flex; flex-direction: column; gap: 1px; min-height: 14px;
+}
+.tt-title { font-weight: 600; }
+.tt-place, .tt-people { color: #6b665e; font-size: 10px; }
+
+.tt-untimed { min-height: 22px; display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; }
+.tt-chip {
+  border: 0; border-left: 3px solid var(--cat, #999); border-radius: 3px;
+  background: #f0eee8; font: inherit; font-size: 11px; padding: 2px 6px; cursor: pointer;
+}
+.tt-floating {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  padding: 0.4rem 0; margin-bottom: 0.5rem; border-bottom: 1px dashed #ddd9d0;
+}
+
+.tt-daytabs { display: flex; gap: 0.3rem; overflow-x: auto; margin-bottom: 0.5rem; }
+.tt-daytab {
+  border: 1px solid #ddd9d0; background: #fff; border-radius: 999px;
+  padding: 0.25rem 0.7rem; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+.tt-daytab.active { background: #2a2723; color: #fff; border-color: #2a2723; }
+
+.tt-flow-day { margin-bottom: 1.2rem; }
+.tt-flow-head {
+  position: sticky; top: 0; z-index: 2; background: #fafaf8;
+  font-weight: 600; font-size: 13px; padding: 0.3rem 0; border-bottom: 1px solid #e5e3dd;
+}
+
+/* ---- Schedule list ---- */
+.sl-group { margin-bottom: 1rem; }
+.sl-group-head { font-weight: 600; font-size: 13px; margin-bottom: 0.3rem; }
+.sl-row {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%;
+  border: 0; border-bottom: 1px solid #eeece6; background: none;
+  padding: 0.5rem 0.2rem; font: inherit; text-align: left; cursor: pointer;
+}
+.sl-row:hover { background: #f5f3ee; }
+.sl-time { flex: 0 0 90px; font-size: 12px; color: #6b665e; }
+.sl-main { flex: 1; min-width: 0; }
+.sl-place { font-size: 12px; margin-left: 0.4rem; }
+.sl-people { flex: 0 0 auto; font-size: 12px; }
+
+/* ---- Schedule tab shell ---- */
+.sched-bar {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.8rem;
+}
+.sched-seg { display: flex; border: 1px solid #ddd9d0; border-radius: 6px; overflow: hidden; }
+.sched-seg button {
+  border: 0; background: #fff; font: inherit; font-size: 12px;
+  padding: 0.3rem 0.6rem; cursor: pointer;
+}
+.sched-seg button.active { background: #2a2723; color: #fff; }
+.check-inline {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  margin-right: 0.7rem; font-size: 14px;
+}
+.sf-time-row { display: flex; align-items: center; gap: 0.4rem; }
+.sf-time-row .input { flex: 1; }
+
+/* Category accent colours as --cat custom properties. The rules above read
+   var(--cat) for block/chip left borders. Values must match CATEGORY_META in
+   categories.js exactly -- they passed colourblind-safety validation. These
+   only define --cat and must not touch the existing .tag[data-cat=...]
+   background/color rules above. */
+[data-cat="lodging"]   { --cat: #2a78d6; }
+[data-cat="food"]      { --cat: #eb6834; }
+[data-cat="grocery"]   { --cat: #1baf7a; }
+[data-cat="transport"] { --cat: #eda100; }
+[data-cat="play"]      { --cat: #e87ba4; }
+[data-cat="etc"]       { --cat: #4a3aa7; }
