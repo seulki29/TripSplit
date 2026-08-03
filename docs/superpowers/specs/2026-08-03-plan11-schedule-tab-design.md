@@ -142,7 +142,12 @@ if (!snap.exists) await ref.set({ name: '1안', isActive: true, ... });
 | `participants` | 배열, 중복 제거 후 전부 실재 `memberId` | `INVALID_PARTICIPANTS` |
 | `planId` | 실재하는 plan 문서 | `PLAN_NOT_FOUND` |
 
-새 코드는 `public/errorMessages.js`의 `MESSAGES`에 추가한다. 없으면 `FALLBACK` 문구가 나가서 사용자가 무엇이 틀렸는지 알 수 없다.
+새 코드는 **두 곳**에 등록해야 한다. 하나만 하면 조용히 실패한다.
+
+1. `public/errorMessages.js`의 `MESSAGES` — 없으면 `FALLBACK` 문구가 나간다.
+2. `functions/src/lib/httpsErrors.js`의 `DOMAIN_ERROR_CODES` — **없으면 프론트가 코드를 볼 수조차 없다.** `toHttpsError`는 이 Set에 없고 `_NOT_FOUND`로 끝나지도 않는 코드를 전부 버그로 간주해, `console.error`를 찍고 `INTERNAL_ERROR`로 바꿔 내보낸다. 즉 1번만 하면 애써 쓴 한국어 문구가 도달하지 못한다.
+
+이 스펙은 처음에 2번을 빠뜨렸고, 콜러블 테스트가 핸들러를 직접 호출해 `toHttpsError`를 우회하기 때문에 테스트도 잡아내지 못했다. 최종 리뷰에서 발견돼 `bf3673a`에서 고쳤다. `_NOT_FOUND`로 끝나는 `PLAN_NOT_FOUND`·`SCHEDULE_NOT_FOUND`는 규칙에 걸려 자동 통과한다.
 
 - `TITLE_REQUIRED`: '일정 내용을 입력해주세요.'
 - `SCHEDULE_TEXT_TOO_LONG`: '입력이 너무 깁니다.'
@@ -266,7 +271,9 @@ renderDayColumn(날짜, 일정들, opts)   ← 겹침 레인 · 픽셀 환산 ·
 
 `660 ↔ '11:00'`.
 
-`1440`을 `'24:00'`으로 표시하는 경우가 하나 있다: **시간축의 마지막 눈금**. `timeRangeFor`의 `to`는 23:45에 끝나는 일정 때문에 1440까지 올라갈 수 있고, 그 눈금을 `'00:00'`으로 적으면 축이 자정으로 되감긴 것처럼 보인다.
+`1440`은 `'24:00'`으로 표시한다 — `'00:00'`으로 적으면 자정으로 되감긴 것처럼 보이기 때문이다.
+
+**구현 후 정정**: 이 케이스는 현재 화면에서 도달하지 않는다. 시간축 눈금은 각 칸이 *시작하는* 시각으로 라벨링되므로 마지막 라벨이 `toMin - 60`이고, `1440`은 라벨로 찍히지 않는다. `minToLabel`의 동작과 테스트는 그대로 유효하며, 나중에 축의 끝 눈금을 표시하기로 하면 다시 쓰인다.
 
 일정 자체의 값 범위는 이렇게 갈린다.
 
