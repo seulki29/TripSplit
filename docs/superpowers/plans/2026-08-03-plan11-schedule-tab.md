@@ -1754,9 +1754,15 @@ function renderDayColumn(bucket, fromMin, toMin, members) {
   </div>`;
 }
 
+// The loop bound is exclusive of toMin on purpose. Each band is HOUR_PX tall
+// and labelled with the hour it *starts*, so an axis of 08:00-22:00 needs 14
+// bands (08:00 through 21:00), not 15. An inclusive bound would make the
+// gutter one band taller than renderDayColumn's explicit column height, and
+// flex cannot stretch a column that already has an explicit height — the
+// columns would end 48px short of a trailing, orphaned hour label.
 function renderGutter(fromMin, toMin) {
   const rows = [];
-  for (let m = fromMin; m <= toMin; m += 60) {
+  for (let m = fromMin; m < toMin; m += 60) {
     rows.push(`<div class="tt-hour" style="height:${HOUR_PX}px">${minToLabel(m)}</div>`);
   }
   return `<div class="tt-gutter">${rows.join('')}</div>`;
