@@ -2,7 +2,8 @@ const { FakeFirestore } = require('../helpers/fakeFirestore');
 const { makeFakeBucket } = require('../helpers/fakeBucket');
 const { createSession } = require('../../src/lib/sessions');
 const {
-  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense, setExpenseExclusions,
+  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense,
+  setExpenseExclusions, setExpenseWaypoint,
 } = require('../../src/functions/expenses');
 
 describe('expenses', () => {
@@ -240,6 +241,18 @@ describe('expenses', () => {
 
     const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
     expect(snap.data().photoPath).toBeNull();
+  });
+
+  test('addExpense initialises isWaypoint to false', async () => {
+    const db = new FakeFirestore();
+    const { token } = await createSession(db, { role: 'member', tripId: 't1', memberId: 'm1' });
+
+    const { expenseId } = await addExpense(db, {
+      sessionToken: token, tripId: 't1', date: '2026-08-11', category: '식비', amount: 10000,
+    });
+
+    const snap = await db.collection('trips').doc('t1').collection('expenses').doc(expenseId).get();
+    expect(snap.data().isWaypoint).toBe(false);
   });
 });
 
@@ -507,5 +520,107 @@ describe('setExpenseExclusions', () => {
     await expect(setExpenseExclusions(db, {
       sessionToken: memberToken, tripId: 't1', expenseIds: [], excludedMemberIds: [],
     })).rejects.toThrow();
+  });
+});
+
+describe('setExpenseWaypoint', () => {
+  async function setup(db, { status = 'active' } = {}) {
+    const tripRef = await db.collection('trips').add({
+      slug: 'a', name: 'A', group: 'G', status, adminPinHash: 'x', memberPinHash: 'y',
+    });
+    const m1 = await tripRef.collection('members').add({ name: '가', weight: 1 });
+    const m2 = await tripRef.collection('members').add({ name: '나', weight: 1 });
+    const owner = await createSession(db, { role: 'member', tripId: tripRef.id, memberId: m1.id });
+    const other = await createSession(db, { role: 'member', tripId: tripRef.id, memberId: m2.id });
+    const expRef = await tripRef.collection('expenses').add({
+      date: '2026-08-11', category: '식비', amount: 10000, merchant: '동문시장', detail: '',
+      enteredBy: m1.id, recordedBy: 'member', photoPath: null, excludedMembers: [],
+      confirmed: false, confirmedAt: null, isWaypoint: false,
+      createdAt: Date.now(), updatedAt: Date.now(),
+    });
+    return {
+      tripId: tripRef.id, tripRef, expenseId: expRef.id, expRef,
+      ownerToken: owner.token, otherToken: other.token,
+    };
+  }
+
+  test('경유지로 표시하고 해제한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+
+    await setExpenseWaypoint(db, {
+      sessionToken: t.ownerToken, tripId: t.tripId, expenseId: t.expenseId, isWaypoint: true,
+    });
+    expect((await t.expRef.get()).data().isWaypoint).toBe(true);
+
+    await setExpenseWaypoint(db, {
+      sessionToken: t.ownerToken, tripId: t.tripId, expenseId: t.expenseId, isWaypoint: false,
+    });
+    expect((await t.expRef.get()).data().isWaypoint).toBe(false);
+  });
+
+  // updateExpense와의 결정적 차이. 경로 맵은 공동의 기록이다.
+  test('남이 입력한 경비에도 성공한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await setExpenseWaypoint(db, {
+      sessionToken: t.otherToken, tripId: t.tripId, expenseId: t.expenseId, isWaypoint: true,
+    });
+    expect((await t.expRef.get()).data().isWaypoint).toBe(true);
+  });
+
+  // 확정 후가 이 기능의 주 사용 시점이다.
+  test('확정된 경비에도 성공한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await t.expRef.update({ confirmed: true });
+    await setExpenseWaypoint(db, {
+      sessionToken: t.ownerToken, tripId: t.tripId, expenseId: t.expenseId, isWaypoint: true,
+    });
+    expect((await t.expRef.get()).data().isWaypoint).toBe(true);
+  });
+
+  // 완료된 여행의 회고가 주 사용 시점이다.
+  test('완료된 여행에서도 성공한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db, { status: 'completed' });
+    await setExpenseWaypoint(db, {
+      sessionToken: t.ownerToken, tripId: t.tripId, expenseId: t.expenseId, isWaypoint: true,
+    });
+    expect((await t.expRef.get()).data().isWaypoint).toBe(true);
+  });
+
+  test('불린이 아닌 값을 불린으로 강제한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await setExpenseWaypoint(db, {
+      sessionToken: t.ownerToken, tripId: t.tripId, expenseId: t.expenseId, isWaypoint: 'yes',
+    });
+    expect((await t.expRef.get()).data().isWaypoint).toBe(true);
+  });
+
+  test('없는 경비는 EXPENSE_NOT_FOUND', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await expect(setExpenseWaypoint(db, {
+      sessionToken: t.ownerToken, tripId: t.tripId, expenseId: 'nope', isWaypoint: true,
+    })).rejects.toThrow('EXPENSE_NOT_FOUND');
+  });
+
+  test('다른 여행의 세션은 FORBIDDEN', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const { token } = await createSession(db, { role: 'member', tripId: 'other', memberId: 'x' });
+    await expect(setExpenseWaypoint(db, {
+      sessionToken: token, tripId: t.tripId, expenseId: t.expenseId, isWaypoint: true,
+    })).rejects.toThrow('FORBIDDEN');
+  });
+
+  test('세션이 없으면 UNAUTHENTICATED', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await expect(setExpenseWaypoint(db, {
+      tripId: t.tripId, expenseId: t.expenseId, isWaypoint: true,
+    })).rejects.toThrow('UNAUTHENTICATED');
   });
 });

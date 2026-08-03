@@ -61,6 +61,7 @@ async function addExpense(db, data) {
     excludedMembers,
     confirmed: false,
     confirmedAt: null,
+    isWaypoint: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
@@ -171,6 +172,34 @@ async function setExpenseExclusions(db, data) {
   return { ok: true };
 }
 
+/**
+ * Flags an expense as a stop on the trip's route map.
+ *
+ * Deliberately looser than updateExpense, which limits members to their own
+ * unconfirmed entries. The route map is assembled after the trip, when every
+ * expense is confirmed and the trip may be marked complete -- inheriting those
+ * rules would make the feature unusable exactly when it is wanted. It changes
+ * one boolean and touches no money, which is why setMemberSettled and
+ * setMyAccount skip requireTripEditable for the same reason.
+ */
+async function setExpenseWaypoint(db, data) {
+  const { sessionToken, tripId, expenseId } = data;
+  await requireSession(db, sessionToken, ['admin', 'member'], tripId);
+
+  const ref = db.collection('trips').doc(tripId).collection('expenses').doc(expenseId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error('EXPENSE_NOT_FOUND');
+
+  await ref.update({ isWaypoint: !!data.isWaypoint, updatedAt: Date.now() });
+  return { ok: true };
+}
+
 module.exports = {
-  listExpenses, addExpense, updateExpense, deleteExpense, confirmExpense, setExpenseExclusions,
+  listExpenses,
+  addExpense,
+  updateExpense,
+  deleteExpense,
+  confirmExpense,
+  setExpenseExclusions,
+  setExpenseWaypoint,
 };
