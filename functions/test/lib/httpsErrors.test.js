@@ -53,12 +53,24 @@ describe('toHttpsError', () => {
       'NAME_TAKEN', 'INVALID_CATEGORY', 'INVALID_AMOUNT', 'ENTERED_BY_REQUIRED',
       'EXPENSE_LOCKED', 'INVALID_STATUS', 'INVALID_WEIGHT', 'INVALID_EXCLUDED_CATEGORIES',
       'INVALID_EXCLUDED_MEMBERS', 'INVALID_MIME_TYPE', 'INVALID_PHOTO_PATH',
+      'TITLE_REQUIRED', 'SCHEDULE_TEXT_TOO_LONG', 'INVALID_SCHEDULE_DATE', 'INVALID_SCHEDULE_TIME',
+      'INVALID_PARTICIPANTS', 'TRIP_COMPLETED',
     ];
     for (const code of codes) {
       const err = toHttpsError(new Error(code));
       expect(err.code).toBe('invalid-argument');
       expect(err.message).toBe(code);
     }
+  });
+
+  // Regression: these schedule-tab validation codes were thrown by
+  // schedules.js but never added to DOMAIN_ERROR_CODES, so they silently
+  // fell through to a generic internal error instead of reaching the client.
+  test('maps a schedule validation code to invalid-argument and preserves its message', () => {
+    const err = toHttpsError(new Error('TITLE_REQUIRED'));
+    expect(err.code).toBe('invalid-argument');
+    expect(err.message).toBe('TITLE_REQUIRED');
+    expect(consoleError).not.toHaveBeenCalled();
   });
 
   test('hides an unrecognised error behind a generic internal error', () => {
