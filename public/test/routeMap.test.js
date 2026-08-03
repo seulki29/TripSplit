@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWaypoints, serpentineLayout, NODE_R } from '../routeMap.js';
+import { buildWaypoints, serpentineLayout, renderRouteMap, NODE_R } from '../routeMap.js';
 
 function sched(over = {}) {
   return {
@@ -183,5 +183,113 @@ describe('serpentineLayout', () => {
 
   test('NODE_R을 export한다', () => {
     assert.equal(NODE_R, 14);
+  });
+});
+
+describe('renderRouteMap', () => {
+  const opts = { location: '제주', period: { start: '2026-08-10', end: '2026-08-13' } };
+  const one = [{ label: '성산일출봉', category: '놀이', date: '2026-08-11' }];
+
+  test('경유지가 없으면 SVG 대신 안내 문구', () => {
+    const html = renderRouteMap([], opts);
+    assert.ok(!html.includes('<svg'));
+    assert.ok(html.includes('아직 경로에 표시할 장소가 없습니다'));
+    // 무엇을 하면 채워지는지 알려준다 — 두 경로 다 눈에 띄지 않는 기능이다.
+    assert.ok(html.includes('일정에 위치'));
+    assert.ok(html.includes('경유지로 표시'));
+  });
+
+  test('경유지가 있으면 SVG를 낸다', () => {
+    const html = renderRouteMap(one, opts);
+    assert.ok(html.includes('<svg'));
+    assert.ok(html.includes('viewBox="0 0 300 110"'));
+  });
+
+  test('머리말에 기간·개수·지역이 들어간다', () => {
+    const html = renderRouteMap(one, opts);
+    assert.ok(html.includes('8.10'));
+    assert.ok(html.includes('8.13'));
+    assert.ok(html.includes('1곳'));
+    assert.ok(html.includes('제주'));
+  });
+
+  test('지역이 없으면 생략한다', () => {
+    const html = renderRouteMap(one, { location: '', period: opts.period });
+    assert.ok(html.includes('1곳'));
+    assert.ok(!html.includes('· ·'));
+  });
+
+  test('노드 테두리가 카테고리 색이고 채움은 표면색', () => {
+    // 카테고리 색으로 채우고 흰 번호를 얹으면 6색 중 5색이 4.5:1에 미달한다.
+    const html = renderRouteMap(one, opts);
+    assert.ok(html.includes('stroke="#e87ba4"'), '놀이 색이 테두리여야 한다');
+    assert.ok(html.includes('fill="var(--paper)"'), '채움은 표면색이어야 한다');
+    assert.ok(!html.includes('fill="#e87ba4"'), '카테고리 색으로 채우면 안 된다');
+  });
+
+  test('번호가 1부터 매겨진다', () => {
+    const html = renderRouteMap([
+      { label: 'A', category: '기타', date: '2026-08-10' },
+      { label: 'B', category: '기타', date: '2026-08-10' },
+    ], opts);
+    assert.ok(html.includes('>1</text>'));
+    assert.ok(html.includes('>2</text>'));
+  });
+
+  test('장소명을 이스케이프한다', () => {
+    const html = renderRouteMap([{ label: '<script>x</script>', category: '기타', date: '2026-08-10' }], opts);
+    assert.ok(!html.includes('<script>'));
+    assert.ok(html.includes('&lt;script&gt;'));
+  });
+
+  test('7자 이하는 한 줄', () => {
+    const html = renderRouteMap([{ label: '성산일출봉', category: '기타', date: '2026-08-10' }], opts);
+    assert.ok(html.includes('>성산일출봉</tspan>'));
+  });
+
+  test('8~14자는 두 줄로 쪼갠다', () => {
+    const html = renderRouteMap([{ label: '켄싱턴리조트평창', category: '기타', date: '2026-08-10' }], opts);
+    assert.ok(html.includes('>켄싱턴리조트평</tspan>'));
+    assert.ok(html.includes('>창</tspan>'));
+  });
+
+  test('14자를 넘으면 말줄임표', () => {
+    const label = '가나다라마바사아자차카타파하거너';  // 16자
+    const html = renderRouteMap([{ label, category: '기타', date: '2026-08-10' }], opts);
+    assert.ok(html.includes('…'));
+  });
+
+  test('전체 이름이 title 요소에 들어간다', () => {
+    const label = '가나다라마바사아자차카타파하거너';
+    const html = renderRouteMap([{ label, category: '기타', date: '2026-08-10' }], opts);
+    assert.ok(html.includes(`<title>${label}</title>`));
+  });
+
+  // 지그재그 배치는 날짜 경계를 잃어버린다. 칩 하나로 "며칠째 어디"가 읽힌다.
+  test('날짜가 바뀌는 노드에만 날짜 칩이 붙는다', () => {
+    const html = renderRouteMap([
+      { label: 'A', category: '기타', date: '2026-08-10' },
+      { label: 'B', category: '기타', date: '2026-08-10' },
+      { label: 'C', category: '기타', date: '2026-08-11' },
+    ], opts);
+    const chips = html.match(/class="rm-date"/g) || [];
+    assert.equal(chips.length, 2, '첫 노드와 날짜가 바뀐 노드, 둘뿐이어야 한다');
+    assert.ok(html.includes('>8.10</text>'));
+    assert.ok(html.includes('>8.11</text>'));
+  });
+
+  test('연결선이 노드 수보다 하나 적다', () => {
+    const html = renderRouteMap([
+      { label: 'A', category: '기타', date: '2026-08-10' },
+      { label: 'B', category: '기타', date: '2026-08-10' },
+      { label: 'C', category: '기타', date: '2026-08-10' },
+    ], opts);
+    const lines = html.match(/class="rm-link"/g) || [];
+    assert.equal(lines.length, 2);
+  });
+
+  test('노드가 하나면 연결선이 없다', () => {
+    const html = renderRouteMap(one, opts);
+    assert.equal((html.match(/class="rm-link"/g) || []).length, 0);
   });
 });
