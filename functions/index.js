@@ -86,6 +86,7 @@ exports.updateExpense = onCall(wrap(expenses.updateExpense));
 exports.deleteExpense = onCall(wrapWithBucket(expenses.deleteExpense));
 exports.confirmExpense = onCall(wrap(expenses.confirmExpense));
 exports.setExpenseExclusions = onCall(wrap(expenses.setExpenseExclusions));
+exports.setExpenseWaypoint = onCall(wrap(expenses.setExpenseWaypoint));
 
 exports.classifyReceipt = onCall({ secrets: [geminiApiKey] }, async (request) => {
   try {
