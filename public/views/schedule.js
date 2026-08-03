@@ -13,9 +13,17 @@ const VIEWS = [
 
 // Prevents a slow earlier load's response from landing after a newer one and
 // overwriting fresher data when the tab is re-rendered. Same idiom as
-// member.js's renderToken.
+// member.js's renderToken. A repaint from cache (see paintSchedule) does no
+// await, so it never needs this guard.
 let renderToken = 0;
 let activeDate = null;
+
+// Cache of the last successful fetch, so a pure client-side action (view
+// switch, day-tab switch) can repaint without a network round trip. Safe to
+// keep as module scope across trips: the app does a hard `location.href`
+// navigation whenever the active trip changes, which reloads this module
+// (and resets the cache) along with everything else.
+let cache = null; // { schedules, members, period } | null
 
 function currentView() {
   try {
@@ -35,6 +43,9 @@ function setView(view) {
   }
 }
 
+// Entry point. Always refetches: called on first entry into the tab, and
+// member.js / admin.js call it again on every tab switch, so it must reflect
+// the current server state rather than whatever happens to be cached.
 async function renderScheduleInto(body, slug) {
   const myToken = ++renderToken;
   const session = getSession();
@@ -53,7 +64,9 @@ async function renderScheduleInto(body, slug) {
   body.querySelectorAll('#sched-views button').forEach((btn) => {
     btn.addEventListener('click', () => {
       setView(btn.dataset.view);
-      renderScheduleInto(body, slug);
+      // A view-arrangement toggle is purely client-side — repaint from the
+      // cached data instead of re-issuing the three callables.
+      paintSchedule(body, slug);
     });
   });
   body.querySelector('#sched-refresh').addEventListener('click', () => {
@@ -80,19 +93,7 @@ async function renderScheduleInto(body, slug) {
   }
   if (myToken !== renderToken) return;
 
-  const grouped = groupByDate(data.schedules, trip.period);
-  if (!activeDate || !grouped.dates.includes(activeDate)) {
-    activeDate = grouped.dates[0] || null;
-  }
-
-  const view = currentView();
-  const ctx = { view, activeDate, members };
-  const target = body.querySelector('#sched-body');
-  target.innerHTML = view === 'list' ? renderList(grouped, ctx) : renderTimetable(grouped, ctx);
-
-  function reload() {
-    renderScheduleInto(body, slug);
-  }
+  cache = { schedules: data.schedules, members, period: trip.period };
 
   const addBtn = body.querySelector('#sched-add');
   // Data has loaded and the handler below is now bound, so the button can
@@ -104,16 +105,53 @@ async function renderScheduleInto(body, slug) {
       members,
       schedule: null,
       defaultDate: activeDate || trip.period?.start || '',
-      onSaved: reload,
+      onSaved: () => renderScheduleInto(body, slug),
     });
   });
 
+  paintSchedule(body, slug);
+}
+
+// Repaints #sched-body (and the view-switcher's active state) from the
+// cached payload. No network call, so no loading flash — this is what keeps
+// paging through days or switching arrangements instant.
+function paintSchedule(body, slug) {
+  // A repaint should never run against a null cache. This can only happen if
+  // it's somehow reached before any successful load (e.g. a stray click
+  // racing the very first fetch) — fall back to a real fetch instead of
+  // throwing on cache.schedules below.
+  if (!cache) {
+    renderScheduleInto(body, slug);
+    return;
+  }
+
+  const { schedules, members, period } = cache;
+  const session = getSession();
+
+  const grouped = groupByDate(schedules, period);
+  if (!activeDate || !grouped.dates.includes(activeDate)) {
+    activeDate = grouped.dates[0] || null;
+  }
+
+  const view = currentView();
+  body.querySelectorAll('#sched-views button').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+
+  const ctx = { view, activeDate, members };
+  const target = body.querySelector('#sched-body');
+  target.innerHTML = view === 'list' ? renderList(grouped, ctx) : renderTimetable(grouped, ctx);
+
   target.querySelectorAll('[data-schedule-id]').forEach((el) => {
     el.addEventListener('click', () => {
-      const found = data.schedules.find((s) => s.id === el.dataset.scheduleId);
+      const found = schedules.find((s) => s.id === el.dataset.scheduleId);
       if (!found) { showToast('일정을 찾을 수 없습니다.', 'error'); return; }
       openScheduleForm({
-        tripId: session.tripId, members, schedule: found, defaultDate: null, onSaved: reload,
+        tripId: session.tripId,
+        members,
+        schedule: found,
+        defaultDate: null,
+        onSaved: () => renderScheduleInto(body, slug),
       });
     });
   });
@@ -121,7 +159,8 @@ async function renderScheduleInto(body, slug) {
   target.querySelectorAll('.tt-daytab').forEach((tab) => {
     tab.addEventListener('click', () => {
       activeDate = tab.dataset.date;
-      renderScheduleInto(body, slug);
+      // Switching the active day is also purely client-side.
+      paintSchedule(body, slug);
     });
   });
 }
