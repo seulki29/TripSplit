@@ -46,7 +46,7 @@ async function renderScheduleInto(body, slug) {
           class="${v === currentView() ? 'active' : ''}">${label}</button>`).join('')}
       </div>
       <button type="button" class="btn btn-secondary" id="sched-refresh">새로고침</button>
-      <button type="button" class="btn btn-primary" id="sched-add">일정 추가</button>
+      <button type="button" class="btn btn-primary" id="sched-add" disabled>일정 추가</button>
     </div>
     <div id="sched-body"><p class="muted">불러오는 중...</p></div>`;
 
@@ -94,7 +94,11 @@ async function renderScheduleInto(body, slug) {
     renderScheduleInto(body, slug);
   }
 
-  body.querySelector('#sched-add').addEventListener('click', () => {
+  const addBtn = body.querySelector('#sched-add');
+  // Data has loaded and the handler below is now bound, so the button can
+  // safely leave the disabled state it was rendered with during the load window.
+  addBtn.disabled = false;
+  addBtn.addEventListener('click', () => {
     openScheduleForm({
       tripId: session.tripId,
       members,

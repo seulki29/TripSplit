@@ -13,8 +13,12 @@ import { minToLabel, labelToMin, mapLinkFor } from '../scheduleLayout.js';
 function openScheduleForm({ tripId, members, schedule, defaultDate, onSaved }) {
   const isEdit = !!schedule;
   let category = isEdit ? schedule.category : CATEGORIES[1];
+  // why: schedule.participants may contain ids of members removed since the
+  // schedule was saved. Filtering through the live member list keeps those
+  // stale ids out of `selected` entirely, so they can't be silently
+  // re-submitted and rejected by assertMemberIdsExist on save.
   const selected = new Set(
-    isEdit ? (schedule.participants || []) : members.map((m) => m.id),
+    isEdit ? schedule.participants?.filter((id) => members.some((m) => m.id === id)) || [] : members.map((m) => m.id),
   );
 
   const noDate = isEdit && !schedule.date;

@@ -98,12 +98,20 @@ function timeRangeFor(entries) {
 
 // YYYY-MM-DD 문자열을 하루씩 늘린다. Date 객체를 쓰면 타임존에 따라 하루가
 // 밀릴 수 있어서 UTC로 고정해 계산한다.
+//
+// why: updateTripSetup stores `period` with no validation, so a mistyped
+// year (e.g. 2126-08-02) would otherwise produce tens of thousands of date
+// strings, buckets, and rendered columns -- a hard browser hang. 400 days is
+// comfortably beyond any real trip, so the cap only ever bites an
+// unvalidated/bogus period, never a real itinerary.
+const MAX_DAYS = 400;
+
 function eachDate(start, end) {
   const out = [];
   const cursor = new Date(`${start}T00:00:00Z`);
   const last = new Date(`${end}T00:00:00Z`);
   if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime())) return out;
-  while (cursor <= last) {
+  while (cursor <= last && out.length < MAX_DAYS) {
     out.push(cursor.toISOString().slice(0, 10));
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
