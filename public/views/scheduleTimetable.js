@@ -56,7 +56,7 @@ function renderDayColumn(bucket, fromMin, toMin, members) {
 
 function renderGutter(fromMin, toMin) {
   const rows = [];
-  for (let m = fromMin; m <= toMin; m += 60) {
+  for (let m = fromMin; m < toMin; m += 60) {
     rows.push(`<div class="tt-hour" style="height:${HOUR_PX}px">${minToLabel(m)}</div>`);
   }
   return `<div class="tt-gutter">${rows.join('')}</div>`;
