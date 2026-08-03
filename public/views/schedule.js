@@ -82,6 +82,12 @@ async function renderScheduleInto(body, slug) {
     ]);
   } catch (err) {
     if (myToken !== renderToken) return;
+    // Drop the stale cache so a view-switcher or day-tab click hitting
+    // paintSchedule while the error banner is showing can't silently repaint
+    // the old pre-refresh data over it. paintSchedule's null-cache fallback
+    // turns that click into a real refetch instead -- the same thing a
+    // click would have done before fetch and repaint were split apart.
+    cache = null;
     // Without the member list we can't render the participant checklist. Rather
     // than leave a button that does nothing when clicked, disable it.
     body.querySelector('#sched-add').disabled = true;
