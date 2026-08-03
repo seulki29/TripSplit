@@ -25,6 +25,13 @@ const MESSAGES = {
   EXPENSE_LOCKED: '확정된 항목은 수정할 수 없습니다.',
   TRIP_COMPLETED: '완료된 여행이라 수정할 수 없습니다. 여행 완료를 해제한 뒤 다시 시도해주세요.',
   ENTERED_BY_REQUIRED: '입력 귀속 대상을 선택해주세요.',
+  TITLE_REQUIRED: '일정 내용을 입력해주세요. (100자 이내)',
+  SCHEDULE_TEXT_TOO_LONG: '입력이 너무 깁니다.',
+  INVALID_SCHEDULE_DATE: '날짜가 올바르지 않습니다.',
+  INVALID_SCHEDULE_TIME: '시간이 올바르지 않습니다. 끝 시간은 시작 시간보다 뒤여야 합니다.',
+  INVALID_PARTICIPANTS: '참여자 선택이 올바르지 않습니다.',
+  PLAN_NOT_FOUND: '일정 안을 찾을 수 없습니다.',
+  SCHEDULE_NOT_FOUND: '일정을 찾을 수 없습니다.',
   FORBIDDEN: '권한이 없습니다.',
   INTERNAL_ERROR: '요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.',
 };
