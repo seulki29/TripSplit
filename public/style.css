@@ -362,11 +362,11 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 [data-cat="play"]      { --cat: #e87ba4; }
 [data-cat="etc"]       { --cat: #4a3aa7; }
 
-/* ---- 여행 경로 맵 ---- */
+/* ---- Route map ---- */
 .rm-caption { font-size: 12px; margin-bottom: 0.6rem; }
 .rm-svg { width: 100%; height: auto; display: block; }
 .rm-link { stroke: var(--rule); stroke-width: 2; }
-.rm-node { stroke-width: 3; }
+.rm-node { fill: var(--paper); stroke-width: 3; }
 .rm-num {
   fill: var(--ink); font-size: 12px; font-weight: 600;
   text-anchor: middle; font-family: var(--f-body);
@@ -380,7 +380,7 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
   font-family: var(--f-body);
 }
 
-/* ---- 경유지 토글 ---- */
+/* ---- Waypoint toggle ---- */
 .btn-waypoint {
   border: 1px solid var(--rule); background: none; border-radius: 999px;
   padding: 0.15rem 0.5rem; font: inherit; font-size: 11px;
