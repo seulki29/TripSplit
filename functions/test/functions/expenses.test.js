@@ -723,4 +723,62 @@ describe('expense scheduleId', () => {
       sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: 'nope' },
     })).rejects.toThrow('SCHEDULE_NOT_FOUND');
   });
+
+  // A callable takes whatever the client sends. None of these values is a
+  // document id: real Firestore's validateResourcePath throws an opaque
+  // "not a valid resource path" Error for a non-string or empty id, which
+  // toHttpsError cannot classify and therefore downgrades to INTERNAL_ERROR.
+  const BAD_IDS = [
+    ['숫자', 123],
+    ['빈 문자열', ''],
+    ['객체', {}],
+    ['배열', []],
+    ['불린', true],
+  ];
+
+  BAD_IDS.forEach(([label, bad]) => {
+    test(`addExpense가 ${label} scheduleId를 거부한다`, async () => {
+      const db = new FakeFirestore();
+      const t = await setup(db);
+      await expect(addExpense(db, base(t, { scheduleId: bad }))).rejects.toThrow('SCHEDULE_NOT_FOUND');
+    });
+
+    test(`updateExpense가 ${label} scheduleId를 거부한다`, async () => {
+      const db = new FakeFirestore();
+      const t = await setup(db);
+      const { expenseId } = await addExpense(db, base(t));
+      await expect(updateExpense(db, {
+        sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: bad },
+      })).rejects.toThrow('SCHEDULE_NOT_FOUND');
+    });
+  });
+
+  // The cases above cannot fail against FakeFirestore even with no type guard,
+  // because its doc() stringifies any id and the resulting path simply does not
+  // exist. These two can: they park a schedule at the id a number stringifies
+  // to, so an ungated lookup finds it and links the expense to a schedule the
+  // caller never named. This is the type confusion the guard exists to stop.
+  async function seedNumericIdSchedule(t) {
+    await t.tripRef.collection('schedules').doc('123').set({
+      planId: 'default', title: '숫자 id', category: '놀이', date: '2026-08-11',
+      startMin: 660, endMin: 780, participants: [],
+    });
+  }
+
+  test('숫자 scheduleId가 같은 문자열 id의 일정에 연결되지 않는다 (addExpense)', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await seedNumericIdSchedule(t);
+    await expect(addExpense(db, base(t, { scheduleId: 123 }))).rejects.toThrow('SCHEDULE_NOT_FOUND');
+  });
+
+  test('숫자 scheduleId가 같은 문자열 id의 일정에 연결되지 않는다 (updateExpense)', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await seedNumericIdSchedule(t);
+    const { expenseId } = await addExpense(db, base(t));
+    await expect(updateExpense(db, {
+      sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: 123 },
+    })).rejects.toThrow('SCHEDULE_NOT_FOUND');
+  });
 });

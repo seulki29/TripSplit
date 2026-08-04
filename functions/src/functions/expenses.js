@@ -26,6 +26,13 @@ function isValidPhotoPath(tripId, photoPath) {
  */
 async function assertScheduleExists(db, tripId, scheduleId) {
   if (scheduleId === null || scheduleId === undefined) return;
+  // Reject before the value reaches doc(). Firestore's validateResourcePath
+  // throws a plain "not a valid resource path" Error for a non-string or empty
+  // id; that message matches no rule in toHttpsError, so it would reach the
+  // client as a 500 INTERNAL_ERROR plus a console.error. A value that is not a
+  // document id names no schedule, which is exactly what SCHEDULE_NOT_FOUND
+  // already means.
+  if (typeof scheduleId !== 'string' || scheduleId === '') throw new Error('SCHEDULE_NOT_FOUND');
   const snap = await db.collection('trips').doc(tripId)
     .collection('schedules').doc(scheduleId)
     .get();
