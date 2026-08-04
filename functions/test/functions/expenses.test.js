@@ -624,3 +624,103 @@ describe('setExpenseWaypoint', () => {
     })).rejects.toThrow('UNAUTHENTICATED');
   });
 });
+
+describe('expense scheduleId', () => {
+  async function setup(db) {
+    const tripRef = await db.collection('trips').add({
+      slug: 'a', name: 'A', group: 'G', status: 'active', adminPinHash: 'x', memberPinHash: 'y',
+    });
+    const m1 = await tripRef.collection('members').add({ name: '가', weight: 1 });
+    const s1 = await tripRef.collection('schedules').add({
+      planId: 'default', title: '성산일출봉', category: '놀이', date: '2026-08-11',
+      startMin: 660, endMin: 780, participants: [m1.id],
+    });
+    const { token } = await createSession(db, { role: 'member', tripId: tripRef.id, memberId: m1.id });
+    return {
+      tripId: tripRef.id, tripRef, memberId: m1.id, scheduleId: s1.id, token,
+    };
+  }
+
+  const base = (t, over = {}) => ({
+    sessionToken: t.token,
+    tripId: t.tripId,
+    date: '2026-08-11',
+    category: '식비',
+    amount: 10000,
+    ...over,
+  });
+
+  test('addExpense가 scheduleId를 null로 초기화한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const { expenseId } = await addExpense(db, base(t));
+    const snap = await t.tripRef.collection('expenses').doc(expenseId).get();
+    expect(snap.data().scheduleId).toBeNull();
+  });
+
+  test('실재하는 scheduleId를 저장한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const { expenseId } = await addExpense(db, base(t, { scheduleId: t.scheduleId }));
+    const snap = await t.tripRef.collection('expenses').doc(expenseId).get();
+    expect(snap.data().scheduleId).toBe(t.scheduleId);
+  });
+
+  test('없는 scheduleId는 SCHEDULE_NOT_FOUND', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await expect(addExpense(db, base(t, { scheduleId: 'nope' }))).rejects.toThrow('SCHEDULE_NOT_FOUND');
+  });
+
+  // 다른 여행의 일정에 붙이면 그 여행 구성원이 아닌 사람들의 분담이 섞인다.
+  test('다른 여행의 scheduleId는 SCHEDULE_NOT_FOUND', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const other = await setup(db);
+    await expect(
+      addExpense(db, base(t, { scheduleId: other.scheduleId })),
+    ).rejects.toThrow('SCHEDULE_NOT_FOUND');
+  });
+
+  test('updateExpense가 scheduleId를 바꾼다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const { expenseId } = await addExpense(db, base(t));
+    await updateExpense(db, {
+      sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: t.scheduleId },
+    });
+    const snap = await t.tripRef.collection('expenses').doc(expenseId).get();
+    expect(snap.data().scheduleId).toBe(t.scheduleId);
+  });
+
+  test('updateExpense가 null로 연결을 해제한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const { expenseId } = await addExpense(db, base(t, { scheduleId: t.scheduleId }));
+    await updateExpense(db, {
+      sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: null },
+    });
+    const snap = await t.tripRef.collection('expenses').doc(expenseId).get();
+    expect(snap.data().scheduleId).toBeNull();
+  });
+
+  test('patch에 scheduleId가 없으면 기존 값이 유지된다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const { expenseId } = await addExpense(db, base(t, { scheduleId: t.scheduleId }));
+    await updateExpense(db, {
+      sessionToken: t.token, tripId: t.tripId, expenseId, patch: { amount: 20000 },
+    });
+    const snap = await t.tripRef.collection('expenses').doc(expenseId).get();
+    expect(snap.data().scheduleId).toBe(t.scheduleId);
+  });
+
+  test('updateExpense도 없는 scheduleId를 거부한다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    const { expenseId } = await addExpense(db, base(t));
+    await expect(updateExpense(db, {
+      sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: 'nope' },
+    })).rejects.toThrow('SCHEDULE_NOT_FOUND');
+  });
+});

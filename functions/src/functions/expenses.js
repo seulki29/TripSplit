@@ -19,6 +19,19 @@ function isValidPhotoPath(tripId, photoPath) {
   return PHOTO_PATH_SUFFIX_RE.test(photoPath.slice(prefix.length));
 }
 
+/**
+ * A linked schedule must belong to this same trip. Accepting another trip's id
+ * would let one trip's expense inherit a participant list made of people who
+ * are not members here.
+ */
+async function assertScheduleExists(db, tripId, scheduleId) {
+  if (scheduleId === null || scheduleId === undefined) return;
+  const snap = await db.collection('trips').doc(tripId)
+    .collection('schedules').doc(scheduleId)
+    .get();
+  if (!snap.exists) throw new Error('SCHEDULE_NOT_FOUND');
+}
+
 async function listExpenses(db, data) {
   await requireSession(db, data.sessionToken, ['admin', 'member'], data.tripId);
   const snap = await db.collection('trips').doc(data.tripId).collection('expenses').get();
@@ -38,6 +51,9 @@ async function addExpense(db, data) {
 
   const excludedMembers = data.excludedMembers || [];
   await assertMemberIdsExist(db, tripId, excludedMembers, 'INVALID_EXCLUDED_MEMBERS');
+
+  const scheduleId = data.scheduleId ?? null;
+  await assertScheduleExists(db, tripId, scheduleId);
 
   let enteredBy;
   if (session.role === 'member') {
@@ -59,6 +75,7 @@ async function addExpense(db, data) {
     recordedBy: session.role,
     photoPath: photoPath || null,
     excludedMembers,
+    scheduleId,
     confirmed: false,
     confirmedAt: null,
     isWaypoint: false,
@@ -106,6 +123,11 @@ async function updateExpense(db, data) {
   if ('excludedMembers' in patch) {
     await assertMemberIdsExist(db, tripId, patch.excludedMembers, 'INVALID_EXCLUDED_MEMBERS');
     update.excludedMembers = patch.excludedMembers;
+  }
+  if ('scheduleId' in patch) {
+    const next = patch.scheduleId ?? null;
+    await assertScheduleExists(db, tripId, next);
+    update.scheduleId = next;
   }
 
   update.updatedAt = Date.now();
