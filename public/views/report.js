@@ -16,9 +16,15 @@ async function renderReportInto(container, slug) {
     // Two calls rather than extending getReportData: that function carries the
     // settlement maths and a thick test suite, and a visualisation is no reason
     // to change its shape. Promise.all keeps it to one round trip of latency.
+    // listSchedules fails soft: the route map is a decorative section, and the
+    // money (settlement, category analysis, per-payer, final split) is the
+    // report's primary output and must not go dark because of it. It also
+    // isn't a pure read -- it calls ensureDefaultPlan, which writes plans/default
+    // when absent -- so it has a strictly larger failure surface than the read
+    // beside it and deserves a softer landing.
     [data, scheduleData] = await Promise.all([
       callFunction('getReportData', { tripId: session.tripId }),
-      callFunction('listSchedules', { tripId: session.tripId }),
+      callFunction('listSchedules', { tripId: session.tripId }).catch(() => ({ schedules: [] })),
     ]);
   } catch (err) {
     container.innerHTML = `<p class="muted">리포트를 불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="report-retry">다시 시도</button>`;
