@@ -5,14 +5,21 @@ import { formatDate } from '../format.js';
 import { categoryTag } from '../categories.js';
 import { renderTripPhotosInto } from './tripPhotos.js';
 import { renderDonutChart, renderCategoryComparison, renderComparisonDetail } from '../charts.js';
+import { buildWaypoints, renderRouteMap } from '../routeMap.js';
 
 async function renderReportInto(container, slug) {
   const session = getSession();
   container.innerHTML = '<p class="muted">불러오는 중...</p>';
 
-  let data;
+  let data, scheduleData;
   try {
-    data = await callFunction('getReportData', { tripId: session.tripId });
+    // Two calls rather than extending getReportData: that function carries the
+    // settlement maths and a thick test suite, and a visualisation is no reason
+    // to change its shape. Promise.all keeps it to one round trip of latency.
+    [data, scheduleData] = await Promise.all([
+      callFunction('getReportData', { tripId: session.tripId }),
+      callFunction('listSchedules', { tripId: session.tripId }),
+    ]);
   } catch (err) {
     container.innerHTML = `<p class="muted">리포트를 불러오지 못했습니다: ${escapeHtml(err.message)}</p><button type="button" class="btn btn-secondary" id="report-retry">다시 시도</button>`;
     const rb = container.querySelector('#report-retry');
@@ -49,6 +56,9 @@ async function renderReportInto(container, slug) {
       <p class="muted" style="font-size:13px">확정 지출을 제외되지 않은 구성원끼리 가중치 비율로 나눠 각자 '내야 할 금액'을 구하고, 실제 결제액과 비교해 차액(받을 돈/낼 돈)을 계산합니다. 아래 최종 정산에서 구성원 카드를 누르면 계산 내역을 볼 수 있습니다.</p>
     </div>
     <div class="section"><h2>최종 정산</h2>${renderSettlement(settlement.perMember, session.role === 'admin')}</div>
+    <div class="section"><h2>여행 경로</h2>
+      ${renderRouteMap(buildWaypoints(scheduleData.schedules, expenses), { location: trip.location, period: trip.period })}
+    </div>
     <div class="section"><h2>여행사진</h2><div id="report-photos"></div></div>`;
 
   container.querySelectorAll('.report-receipt-row').forEach((row) => {

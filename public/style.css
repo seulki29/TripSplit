@@ -361,3 +361,32 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 [data-cat="transport"] { --cat: #eda100; }
 [data-cat="play"]      { --cat: #e87ba4; }
 [data-cat="etc"]       { --cat: #4a3aa7; }
+
+/* ---- 여행 경로 맵 ---- */
+.rm-caption { font-size: 12px; margin-bottom: 0.6rem; }
+.rm-svg { width: 100%; height: auto; display: block; }
+.rm-link { stroke: var(--rule); stroke-width: 2; }
+.rm-node { stroke-width: 3; }
+.rm-num {
+  fill: var(--ink); font-size: 12px; font-weight: 600;
+  text-anchor: middle; font-family: var(--f-body);
+}
+.rm-label {
+  fill: var(--ink-2); font-size: 9px; text-anchor: middle;
+  font-family: var(--f-body);
+}
+.rm-date {
+  fill: var(--ink-3); font-size: 9px; text-anchor: middle;
+  font-family: var(--f-body);
+}
+
+/* ---- 경유지 토글 ---- */
+.btn-waypoint {
+  border: 1px solid var(--rule); background: none; border-radius: 999px;
+  padding: 0.15rem 0.5rem; font: inherit; font-size: 11px;
+  color: var(--ink-3); cursor: pointer;
+}
+.btn-waypoint.on {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.btn-waypoint:disabled { opacity: 0.5; cursor: default; }
