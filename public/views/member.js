@@ -97,6 +97,9 @@ async function loadExpenses(body, slug, myToken) {
             <button type="button" class="btn btn-secondary member-delete" data-id="${e.id}">삭제</button>
           </div>` : ''}
         </div>
+        <div style="margin-top:0.4rem">
+          <button type="button" class="btn-waypoint${e.isWaypoint ? ' on' : ''}" data-id="${e.id}" data-on="${e.isWaypoint ? '1' : ''}">📍 경유지</button>
+        </div>
         <p class="muted" style="font-size:13px;margin-top:0.4rem">${escapeHtml(e.merchant || '')} ${escapeHtml(e.detail || '')}</p>
         ${e.excludedMembers && e.excludedMembers.length ? `<p class="muted" style="font-size:12px">제외: ${escapeHtml(e.excludedMembers.map((id) => nameById[id] || '?').join(', '))}</p>` : ''}
       </div>`;
@@ -121,6 +124,23 @@ async function loadExpenses(body, slug, myToken) {
       ev.stopPropagation();
       const exp = expenses.find((x) => x.id === btn.dataset.id);
       openMemberExpenseEditModal(body, slug, exp);
+    });
+  });
+
+  body.querySelectorAll('.btn-waypoint').forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      // The card itself opens the receipt popup; don't trigger that too.
+      ev.stopPropagation();
+      btn.disabled = true;
+      try {
+        await callFunction('setExpenseWaypoint', {
+          tripId: session.tripId, expenseId: btn.dataset.id, isWaypoint: !btn.dataset.on,
+        });
+        await loadExpenses(body, slug, myToken);
+      } catch (err) {
+        btn.disabled = false;
+        showToast(err.message, 'error');
+      }
     });
   });
 
