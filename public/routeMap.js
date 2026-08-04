@@ -55,15 +55,28 @@ function buildWaypoints(schedules, expenses) {
 // are always adjacent. Because a row change keeps the same column slot, the
 // connector between rows runs vertically, curving out to clear the row's
 // label and date chip (see renderLink).
-const PER_ROW = 3;
-const CELL_W = 100;
+const PER_ROW = 4;
+const CELL_W = 80;
 const ROW_H = 90;
-const NODE_R = 14;
-const CANVAS_W = 300;
+const CANVAS_W = 320;
 
-// How far the row-change connector bulges away from the canvas centre. See the
-// why comment on renderLink for what this clears.
-const ROW_BULGE = 34;
+// Distance from the canvas top to the first row's anchor. It is NOT ROW_H/2:
+// the tallest thing above an anchor is the date chip, whose baseline sits at
+// cy-42, and SVG text grows upward from its baseline (~7 units of ascender at
+// font-size 9). At cy=45 that glyph would start at y=-4 and be clipped away.
+const TOP_PAD = 52;
+
+// Marker geometry. The pin is a map teardrop whose TIP sits on the anchor
+// point, with the balloon rising above it -- so the route line, which runs
+// through the anchors, reads as one continuous path with pins stuck into it
+// rather than as separate segments strung between markers.
+const PIN_R = 11;   // balloon radius
+const PIN_H = 26;   // anchor (tip) to balloon centre
+
+// How far the row-change connector bulges away from the canvas centre. 30 keeps
+// the curve 6.3 units clear of the next row's balloon while peaking at x=302.5
+// inside the 320-wide canvas.
+const ROW_BULGE = 30;
 
 // Rows per row count is fixed rather than responsive: the SVG is drawn in a
 // viewBox and stretched with width:100%, so cells shrink on a phone and grow
@@ -79,16 +92,20 @@ function serpentineLayout(waypoints) {
       row,
       col,
       cx: CELL_W / 2 + slot * CELL_W,
-      cy: ROW_H / 2 + row * ROW_H,
+      cy: TOP_PAD + row * ROW_H,
     };
   });
 
   const rows = Math.ceil(waypoints.length / PER_ROW);
-  return { nodes, width: CANVAS_W, height: rows * ROW_H + 20 };
+  // Height runs from the last row's anchor down past its second label line
+  // (cy+24, plus descender and a little air), not a whole extra row -- a
+  // one-row map should not carry 90 units of dead space beneath it.
+  return { nodes, width: CANVAS_W, height: (rows - 1) * ROW_H + TOP_PAD + 30 };
 }
 
-const LABEL_LINE = 7;
-const LABEL_MAX = 14;
+// Cells are 80 units wide, so labels wrap tighter than they did at 3 per row.
+const LABEL_LINE = 6;
+const LABEL_MAX = 12;
 
 // SVG has no automatic text wrapping, so long place names are split by hand
 // into at most two lines. The full name goes in a <title> for desktop hover;
@@ -100,33 +117,56 @@ function labelLines(label) {
   return [label.slice(0, LABEL_LINE), `${label.slice(LABEL_LINE, LABEL_MAX - 1)}…`];
 }
 
-// A row change keeps the same column slot, so cx is identical either side of
-// it. Within a row the connector is a straight horizontal line, stopping at
-// the node edge rather than its centre so the line never shows through the
-// circle.
-function renderLink(a, b) {
-  if (a.cy === b.cy) {
-    const dir = b.cx > a.cx ? 1 : -1;
-    return `<line class="rm-link" x1="${a.cx + NODE_R * dir}" y1="${a.cy}" x2="${b.cx - NODE_R * dir}" y2="${b.cy}"></line>`;
+/**
+ * The whole route as ONE continuous path through every anchor point, drawn
+ * before the markers so the pins sit on top of it.
+ *
+ * Why one path and not a segment per pair: segments that start and stop at each
+ * marker's edge read as "a line between this pin and that one". A single
+ * unbroken stroke running underneath reads as one road with pins stuck into it,
+ * which is what a route map should look like.
+ *
+ * Within a row the run is straight. A row change keeps the same column slot, so
+ * both ends share cx and a straight drop would spear the next row's balloon --
+ * the curve bulges away from the canvas centre to pass outside it.
+ */
+function renderRoutePath(nodes) {
+  if (nodes.length < 2) return '';
+
+  const d = [`M${nodes[0].cx} ${nodes[0].cy}`];
+  for (let i = 1; i < nodes.length; i += 1) {
+    const a = nodes[i - 1];
+    const b = nodes[i];
+    if (a.cy === b.cy) {
+      d.push(`L${b.cx} ${b.cy}`);
+    } else {
+      const bx = a.cx + (a.cx > CANVAS_W / 2 ? ROW_BULGE : -ROW_BULGE);
+      d.push(`C${bx} ${a.cy}, ${bx} ${b.cy}, ${b.cx} ${b.cy}`);
+    }
   }
-  // Why a curve and not a straight vertical line: a row change keeps the same
-  // column slot on both ends, so a straight line runs right through the upper
-  // node's label lines and the lower node's date chip, both of which are
-  // centred on this same cx. Bulging the connector outward -- away from the
-  // canvas centre, toward whichever edge this column is nearer -- routes it
-  // around that text instead of through it. Do not "simplify" this back to a
-  // <line>.
-  const y1 = a.cy + NODE_R;
-  const y2 = b.cy - NODE_R;
-  const bulge = a.cx > CANVAS_W / 2 ? ROW_BULGE : -ROW_BULGE;
-  const cx1 = a.cx + bulge;
-  return `<path class="rm-link" d="M${a.cx} ${y1} C ${cx1} ${y1}, ${cx1} ${y2}, ${b.cx} ${y2}" fill="none"></path>`;
+  return `<path class="rm-link" d="${d.join(' ')}" fill="none"></path>`;
 }
 
-// The node's fill (--paper) is set in CSS on .rm-node, not as a `fill="..."`
+// A map pin: tip at the anchor, balloon centred PIN_H above it. The two cubics
+// taper the balloon's sides down into the point.
+function pinPath(cx, cy) {
+  const by = cy - PIN_H;
+  return [
+    `M${cx} ${cy}`,
+    `C${cx - PIN_R * 0.55} ${cy - PIN_H * 0.45}, ${cx - PIN_R} ${by + PIN_R * 0.6}, ${cx - PIN_R} ${by}`,
+    `A${PIN_R} ${PIN_R} 0 0 1 ${cx + PIN_R} ${by}`,
+    `C${cx + PIN_R} ${by + PIN_R * 0.6}, ${cx + PIN_R * 0.55} ${cy - PIN_H * 0.45}, ${cx} ${cy}`,
+    'Z',
+  ].join(' ');
+}
+
+// The pin's fill (--paper) is set in CSS on .rm-node, not as a `fill="..."`
 // attribute here: `var()` is not a valid paint value in SVG's presentation
 // attribute grammar, so an attribute would be dropped and fall back to the
 // SVG initial fill (black), hiding the numeral inside it.
+//
+// Labels sit below the anchor and the date chip above the balloon, so neither
+// collides with the route line running through the anchor.
 function renderNode(node, showDate) {
   const { waypoint: w, cx, cy, index } = node;
   const lines = labelLines(w.label);
@@ -136,10 +176,10 @@ function renderNode(node, showDate) {
 
   return `<g>
     <title>${escapeHtml(w.label)}</title>
-    ${showDate ? `<text class="rm-date" x="${cx}" y="${cy - NODE_R - 6}">${escapeHtml(formatDate(w.date))}</text>` : ''}
-    <circle class="rm-node" cx="${cx}" cy="${cy}" r="${NODE_R}" stroke="${categoryMark(w.category)}"></circle>
-    <text class="rm-num" x="${cx}" y="${cy + 4}">${index + 1}</text>
-    <text class="rm-label" y="${cy + NODE_R + 13}">${label}</text>
+    ${showDate ? `<text class="rm-date" x="${cx}" y="${cy - PIN_H - PIN_R - 5}">${escapeHtml(formatDate(w.date))}</text>` : ''}
+    <path class="rm-node" d="${pinPath(cx, cy)}" stroke="${categoryMark(w.category)}"></path>
+    <text class="rm-num" x="${cx}" y="${cy - PIN_H + 4}">${index + 1}</text>
+    <text class="rm-label" y="${cy + 13}">${label}</text>
   </g>`;
 }
 
@@ -151,7 +191,7 @@ function renderRouteMap(waypoints, { location, period } = {}) {
 
   const { nodes, width, height } = serpentineLayout(waypoints);
 
-  const links = nodes.slice(1).map((n, i) => renderLink(nodes[i], n)).join('');
+  const links = renderRoutePath(nodes);
   const marks = nodes.map((n, i) => (
     renderNode(n, i === 0 || nodes[i - 1].waypoint.date !== n.waypoint.date)
   )).join('');

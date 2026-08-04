@@ -136,42 +136,44 @@ describe('serpentineLayout', () => {
     assert.deepEqual(nodes, []);
   });
 
-  test('캔버스 폭은 300으로 고정', () => {
-    assert.equal(serpentineLayout(waypoints(5)).width, 300);
+  test('캔버스 폭은 320으로 고정', () => {
+    assert.equal(serpentineLayout(waypoints(5)).width, 320);
   });
 
-  test('0행은 좌에서 우로', () => {
-    const { nodes } = serpentineLayout(waypoints(3));
-    assert.deepEqual(nodes.map((n) => n.cx), [50, 150, 250]);
-    assert.deepEqual(nodes.map((n) => n.cy), [45, 45, 45]);
+  test('0행은 좌에서 우로, 한 행에 4개', () => {
+    const { nodes } = serpentineLayout(waypoints(4));
+    assert.deepEqual(nodes.map((n) => n.cx), [40, 120, 200, 280]);
+    assert.deepEqual(nodes.map((n) => n.cy), [52, 52, 52, 52]);
   });
 
   // 지그재그의 핵심. 1행은 방향이 뒤집혀 오른쪽 끝에서 시작한다.
   test('1행은 우에서 좌로', () => {
-    const { nodes } = serpentineLayout(waypoints(6));
-    assert.deepEqual(nodes.slice(3).map((n) => n.cx), [250, 150, 50]);
-    assert.deepEqual(nodes.slice(3).map((n) => n.cy), [135, 135, 135]);
+    const { nodes } = serpentineLayout(waypoints(8));
+    assert.deepEqual(nodes.slice(4).map((n) => n.cx), [280, 200, 120, 40]);
+    assert.deepEqual(nodes.slice(4).map((n) => n.cy), [142, 142, 142, 142]);
   });
 
-  test('4번째 노드는 1행 오른쪽 끝, 3번째 바로 아래', () => {
-    const { nodes } = serpentineLayout(waypoints(4));
-    assert.equal(nodes[3].cx, 250);
-    assert.equal(nodes[2].cx, 250);
-    assert.equal(nodes[3].row, 1);
+  test('5번째 노드는 1행 오른쪽 끝, 4번째 바로 아래', () => {
+    const { nodes } = serpentineLayout(waypoints(5));
+    assert.equal(nodes[4].cx, 280);
+    assert.equal(nodes[3].cx, 280);
+    assert.equal(nodes[4].row, 1);
   });
 
-  test('7번째 노드는 2행 왼쪽 끝, 6번째 바로 아래', () => {
-    const { nodes } = serpentineLayout(waypoints(7));
-    assert.equal(nodes[6].cx, 50);
-    assert.equal(nodes[5].cx, 50);
-    assert.equal(nodes[6].cy, 225);
+  test('9번째 노드는 2행 왼쪽 끝, 8번째 바로 아래', () => {
+    const { nodes } = serpentineLayout(waypoints(9));
+    assert.equal(nodes[8].cx, 40);
+    assert.equal(nodes[7].cx, 40);
+    assert.equal(nodes[8].cy, 232);
   });
 
-  test('높이는 행 수에 비례한다', () => {
-    assert.equal(serpentineLayout(waypoints(1)).height, 110);
-    assert.equal(serpentineLayout(waypoints(3)).height, 110);
-    assert.equal(serpentineLayout(waypoints(4)).height, 200);
-    assert.equal(serpentineLayout(waypoints(7)).height, 290);
+  // 높이는 마지막 행의 앵커에서 라벨 두 줄 아래까지만 잡는다. 한 행짜리
+  // 지도 밑에 빈 행 하나만큼의 여백이 남지 않도록.
+  test('높이는 행 수에 비례하되 마지막 행은 라벨까지만', () => {
+    assert.equal(serpentineLayout(waypoints(1)).height, 82);
+    assert.equal(serpentineLayout(waypoints(4)).height, 82);
+    assert.equal(serpentineLayout(waypoints(5)).height, 172);
+    assert.equal(serpentineLayout(waypoints(9)).height, 262);
   });
 
   test('노드가 원래 경유지와 인덱스를 들고 있다', () => {
@@ -198,7 +200,7 @@ describe('renderRouteMap', () => {
   test('경유지가 있으면 SVG를 낸다', () => {
     const html = renderRouteMap(one, opts);
     assert.ok(html.includes('<svg'));
-    assert.ok(html.includes('viewBox="0 0 300 110"'));
+    assert.ok(html.includes('viewBox="0 0 320 82"'));
   });
 
   test('머리말에 기간·개수·지역이 들어간다', () => {
@@ -242,18 +244,19 @@ describe('renderRouteMap', () => {
     assert.ok(html.includes('&lt;script&gt;'));
   });
 
-  test('7자 이하는 한 줄', () => {
+  // 셀 폭이 80단위라 3개씩 놓던 때보다 라벨이 일찍 접힌다.
+  test('6자 이하는 한 줄', () => {
     const html = renderRouteMap([{ label: '성산일출봉', category: '기타', date: '2026-08-10' }], opts);
     assert.ok(html.includes('>성산일출봉</tspan>'));
   });
 
-  test('8~14자는 두 줄로 쪼갠다', () => {
+  test('7~12자는 두 줄로 쪼갠다', () => {
     const html = renderRouteMap([{ label: '켄싱턴리조트평창', category: '기타', date: '2026-08-10' }], opts);
-    assert.ok(html.includes('>켄싱턴리조트평</tspan>'));
-    assert.ok(html.includes('>창</tspan>'));
+    assert.ok(html.includes('>켄싱턴리조트</tspan>'));
+    assert.ok(html.includes('>평창</tspan>'));
   });
 
-  test('14자를 넘으면 말줄임표', () => {
+  test('12자를 넘으면 말줄임표', () => {
     const label = '가나다라마바사아자차카타파하거너';  // 16자
     const html = renderRouteMap([{ label, category: '기타', date: '2026-08-10' }], opts);
     assert.ok(html.includes('…'));
@@ -278,14 +281,15 @@ describe('renderRouteMap', () => {
     assert.ok(html.includes('>8.11</text>'));
   });
 
-  test('연결선이 노드 수보다 하나 적다', () => {
-    const html = renderRouteMap([
-      { label: 'A', category: '기타', date: '2026-08-10' },
-      { label: 'B', category: '기타', date: '2026-08-10' },
-      { label: 'C', category: '기타', date: '2026-08-10' },
-    ], opts);
-    const lines = html.match(/class="rm-link"/g) || [];
-    assert.equal(lines.length, 2);
+  // 마커마다 선을 끊었다 다시 시작하면 "핀과 핀을 잇는 선"으로 읽힌다. 앵커를
+  // 전부 통과하는 path 하나를 먼저 깔고 그 위에 핀을 얹어야 "선 위에 핀이
+  // 꽂힌" 그림이 된다. 그래서 연결선 요소는 노드 수와 무관하게 항상 하나다.
+  const routePath = (html) => (html.match(/<path class="rm-link" d="([^"]*)"/) || [])[1];
+
+  test('연결선은 노드가 몇 개든 path 하나다', () => {
+    const many = Array.from({ length: 9 }, (_, i) => ({ label: `P${i}`, category: '기타', date: '2026-08-10' }));
+    const html = renderRouteMap(many, opts);
+    assert.equal((html.match(/class="rm-link"/g) || []).length, 1);
   });
 
   test('노드가 하나면 연결선이 없다', () => {
@@ -293,33 +297,42 @@ describe('renderRouteMap', () => {
     assert.equal((html.match(/class="rm-link"/g) || []).length, 0);
   });
 
-  // 행 변경 연결선을 직선으로 그리면 cx가 양쪽에서 같으므로 위 노드의 라벨과
-  // 아래 노드의 날짜 칩을 그대로 관통한다. 곡선(path + C 커맨드)이어야 한다.
-  test('행이 바뀌는 연결선은 곡선(path)이고, 같은 행 안 연결선은 직선(line)이다', () => {
-    // A-B, B-C는 같은 행(PER_ROW=3)이라 직선, C-D는 다음 행으로 넘어가 곡선이다.
-    const html = renderRouteMap([
-      { label: 'A', category: '기타', date: '2026-08-10' },
-      { label: 'B', category: '기타', date: '2026-08-10' },
-      { label: 'C', category: '기타', date: '2026-08-10' },
-      { label: 'D', category: '기타', date: '2026-08-10' },
-    ], opts);
-    const lines = html.match(/<line class="rm-link"/g) || [];
-    const curves = html.match(/<path class="rm-link" d="[^"]*\bC\b[^"]*"/g) || [];
-    assert.equal(lines.length, 2, 'A-B, B-C는 직선이어야 한다');
-    assert.equal(curves.length, 1, 'C-D는 곡선(C 커맨드가 있는 path)이어야 한다');
-  });
-
-  test('행이 바뀌는 연결선은 캔버스 중심에서 먼 쪽으로 부푼다', () => {
-    // 7개면 0행(왼→오), 1행(오→왼), 2행(왼→오)이 생기고 행 변경이 둘 일어난다:
-    // 2→3은 cx=250(오른쪽 끝)이라 오른쪽으로, 5→6은 cx=50(왼쪽 끝)이라 왼쪽으로
-    // 부풀어야 한다. 좌표는 리뷰에서 실측한 값과 같다(연결선 y는 59~121).
+  test('연결선이 모든 앵커를 지난다', () => {
+    // 한 행에 4개이므로 5개면 0행 넷 + 1행 하나. 같은 행 안은 L, 행이 바뀔 때만 C.
     const html = renderRouteMap(
-      Array.from({ length: 7 }, (_, i) => ({ label: `P${i}`, category: '기타', date: '2026-08-10' })),
+      Array.from({ length: 5 }, (_, i) => ({ label: `P${i}`, category: '기타', date: '2026-08-10' })),
       opts,
     );
-    const ds = [...html.matchAll(/<path class="rm-link" d="([^"]*)"/g)].map((m) => m[1]);
-    assert.equal(ds.length, 2, '행 변경 연결선이 둘이어야 한다');
-    assert.equal(ds[0], 'M250 59 C 284 59, 284 121, 250 121', '오른쪽 끝은 오른쪽으로 부풀어야 한다');
-    assert.equal(ds[1], 'M50 149 C 16 149, 16 211, 50 211', '왼쪽 끝은 왼쪽으로 부풀어야 한다');
+    assert.equal(routePath(html), 'M40 52 L120 52 L200 52 L280 52 C310 52, 310 142, 280 142');
+  });
+
+  test('행이 바뀌는 구간은 캔버스 중심에서 먼 쪽으로 부푼다', () => {
+    // 9개면 행 변경이 둘 일어난다: 3→4는 cx=280(오른쪽 끝)이라 오른쪽(310)으로,
+    // 7→8은 cx=40(왼쪽 끝)이라 왼쪽(10)으로 부풀어야 다음 행 핀을 비껴간다.
+    const html = renderRouteMap(
+      Array.from({ length: 9 }, (_, i) => ({ label: `P${i}`, category: '기타', date: '2026-08-10' })),
+      opts,
+    );
+    const d = routePath(html);
+    assert.ok(d.includes('C310 52, 310 142, 280 142'), '오른쪽 끝은 오른쪽으로 부풀어야 한다');
+    assert.ok(d.includes('C10 142, 10 232, 40 232'), '왼쪽 끝은 왼쪽으로 부풀어야 한다');
+  });
+
+  // 핀 끝이 앵커에 놓이고 풍선이 그 위로 뜬다 -- 선이 앵커를 지나가므로
+  // "선에 꽂힌 핀"으로 읽힌다. 원이 선 위에 얹혀 있던 이전 모양과 다르다.
+  test('마커는 원이 아니라 끝점이 앵커에 놓인 핀이다', () => {
+    const html = renderRouteMap(one, opts);
+    assert.ok(!html.includes('<circle'), '원이 남아 있으면 안 된다');
+    const pin = (html.match(/<path class="rm-node" d="([^"]*)"/) || [])[1];
+    assert.ok(pin, '핀 path가 있어야 한다');
+    assert.ok(pin.startsWith('M40 52'), `핀이 앵커(40,52)에서 시작해야 한다: ${pin}`);
+    assert.ok(pin.includes('A11 11'), '풍선이 반지름 11 호여야 한다');
+    assert.ok(pin.trim().endsWith('Z'), '닫힌 도형이어야 한다');
+  });
+
+  test('번호는 핀 끝이 아니라 풍선 안에 찍힌다', () => {
+    const html = renderRouteMap(one, opts);
+    // 앵커 52, 풍선 중심은 그 위 26 -> 26. baseline은 시각적 중앙 보정으로 +4.
+    assert.ok(html.includes('<text class="rm-num" x="40" y="30">1</text>'), html);
   });
 });

@@ -364,11 +364,17 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 
 /* ---- Route map ---- */
 .rm-caption { font-size: 12px; margin-bottom: 0.6rem; }
-.rm-svg { width: 100%; height: auto; display: block; }
-.rm-link { stroke: var(--rule); stroke-width: 2; }
-.rm-node { fill: var(--paper); stroke-width: 3; }
+/* The viewBox is 320 units wide. Without a cap the SVG stretches to the
+   container (up to 960px), scaling the 9-unit labels past body-text size on a
+   desktop. 400px keeps the drawing near 1:1 at both ends: ~1.07x on a 375px
+   phone, 1.25x capped on a wide screen. */
+.rm-svg {
+  width: 100%; max-width: 400px; height: auto; display: block; margin: 0 auto;
+}
+.rm-link { stroke: var(--rule); stroke-width: 2; fill: none; }
+.rm-node { fill: var(--paper); stroke-width: 2.5; }
 .rm-num {
-  fill: var(--ink); font-size: 12px; font-weight: 600;
+  fill: var(--ink); font-size: 11px; font-weight: 600;
   text-anchor: middle; font-family: var(--f-body);
 }
 .rm-label {
