@@ -96,4 +96,20 @@ describe('groupSchedulesForPicker', () => {
     const groups = groupSchedulesForPicker([sched({ startMin: null, title: '기념품' })]);
     assert.equal(groups[0].items[0].label, '시간미정 기념품');
   });
+
+  test('제목이 없으면 시간만 표시', () => {
+    const groups = groupSchedulesForPicker([sched({ startMin: 660, title: null })]);
+    assert.equal(groups[0].items[0].label, '11:00');
+  });
+
+  test('제목과 시간이 없으면 "시간미정"만 표시', () => {
+    const groups = groupSchedulesForPicker([sched({ startMin: null, title: null })]);
+    assert.equal(groups[0].items[0].label, '시간미정');
+  });
+
+  test('제목이 undefined여도 라벨에 "undefined" 문자열이 나타나지 않는다', () => {
+    const groups = groupSchedulesForPicker([{ id: 'x', date: '2026-08-11', startMin: 600 }]);
+    assert(!groups[0].items[0].label.includes('undefined'));
+    assert.equal(groups[0].items[0].label, '10:00');
+  });
 });

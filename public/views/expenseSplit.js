@@ -33,10 +33,16 @@ function groupSchedulesForPicker(schedules) {
         const bm = typeof b.startMin === 'number' ? b.startMin : 1440;
         return am - bm;
       })
-      .map((s) => ({
-        id: s.id,
-        label: `${typeof s.startMin === 'number' ? minToLabel(s.startMin) : '시간미정'} ${s.title}`,
-      })),
+      .map((s) => {
+        // Guard the title against undefined/null values. A schedule is still
+        // valid even without a title (unlike a waypoint with no place name).
+        const titleStr = String(s.title ?? '').trim();
+        const timeLabel = typeof s.startMin === 'number' ? minToLabel(s.startMin) : '시간미정';
+        return {
+          id: s.id,
+          label: titleStr ? `${timeLabel} ${titleStr}` : timeLabel,
+        };
+      }),
   }));
 }
 
