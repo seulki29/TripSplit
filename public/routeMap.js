@@ -53,12 +53,17 @@ function buildWaypoints(schedules, expenses) {
 
 // Layout is a boustrophedon: rows alternate direction, so consecutive nodes
 // are always adjacent. Because a row change keeps the same column slot, the
-// connector between rows is a plain vertical line.
+// connector between rows runs vertically, curving out to clear the row's
+// label and date chip (see renderLink).
 const PER_ROW = 3;
 const CELL_W = 100;
 const ROW_H = 90;
 const NODE_R = 14;
 const CANVAS_W = 300;
+
+// How far the row-change connector bulges away from the canvas centre. See the
+// why comment on renderLink for what this clears.
+const ROW_BULGE = 34;
 
 // Rows per row count is fixed rather than responsive: the SVG is drawn in a
 // viewBox and stretched with width:100%, so cells shrink on a phone and grow
@@ -96,17 +101,32 @@ function labelLines(label) {
 }
 
 // A row change keeps the same column slot, so cx is identical either side of
-// it and the connector is a plain vertical line. Within a row it is horizontal.
-// Both stop at the node edge rather than its centre so the line never shows
-// through the circle.
+// it. Within a row the connector is a straight horizontal line, stopping at
+// the node edge rather than its centre so the line never shows through the
+// circle.
 function renderLink(a, b) {
   if (a.cy === b.cy) {
     const dir = b.cx > a.cx ? 1 : -1;
     return `<line class="rm-link" x1="${a.cx + NODE_R * dir}" y1="${a.cy}" x2="${b.cx - NODE_R * dir}" y2="${b.cy}"></line>`;
   }
-  return `<line class="rm-link" x1="${a.cx}" y1="${a.cy + NODE_R}" x2="${b.cx}" y2="${b.cy - NODE_R}"></line>`;
+  // Why a curve and not a straight vertical line: a row change keeps the same
+  // column slot on both ends, so a straight line runs right through the upper
+  // node's label lines and the lower node's date chip, both of which are
+  // centred on this same cx. Bulging the connector outward -- away from the
+  // canvas centre, toward whichever edge this column is nearer -- routes it
+  // around that text instead of through it. Do not "simplify" this back to a
+  // <line>.
+  const y1 = a.cy + NODE_R;
+  const y2 = b.cy - NODE_R;
+  const bulge = a.cx > CANVAS_W / 2 ? ROW_BULGE : -ROW_BULGE;
+  const cx1 = a.cx + bulge;
+  return `<path class="rm-link" d="M${a.cx} ${y1} C ${cx1} ${y1}, ${cx1} ${y2}, ${b.cx} ${y2}" fill="none"></path>`;
 }
 
+// The node's fill (--paper) is set in CSS on .rm-node, not as a `fill="..."`
+// attribute here: `var()` is not a valid paint value in SVG's presentation
+// attribute grammar, so an attribute would be dropped and fall back to the
+// SVG initial fill (black), hiding the numeral inside it.
 function renderNode(node, showDate) {
   const { waypoint: w, cx, cy, index } = node;
   const lines = labelLines(w.label);
@@ -117,7 +137,7 @@ function renderNode(node, showDate) {
   return `<g>
     <title>${escapeHtml(w.label)}</title>
     ${showDate ? `<text class="rm-date" x="${cx}" y="${cy - NODE_R - 6}">${escapeHtml(formatDate(w.date))}</text>` : ''}
-    <circle class="rm-node" cx="${cx}" cy="${cy}" r="${NODE_R}" fill="var(--paper)" stroke="${categoryMark(w.category)}"></circle>
+    <circle class="rm-node" cx="${cx}" cy="${cy}" r="${NODE_R}" stroke="${categoryMark(w.category)}"></circle>
     <text class="rm-num" x="${cx}" y="${cy + 4}">${index + 1}</text>
     <text class="rm-label" y="${cy + NODE_R + 13}">${label}</text>
   </g>`;
@@ -147,7 +167,4 @@ function renderRouteMap(waypoints, { location, period } = {}) {
     </svg>`;
 }
 
-export {
-  buildWaypoints, serpentineLayout, renderRouteMap,
-  PER_ROW, CELL_W, ROW_H, NODE_R, CANVAS_W,
-};
+export { buildWaypoints, serpentineLayout, renderRouteMap };

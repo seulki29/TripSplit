@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWaypoints, serpentineLayout, renderRouteMap, NODE_R } from '../routeMap.js';
+import { buildWaypoints, serpentineLayout, renderRouteMap } from '../routeMap.js';
 
 function sched(over = {}) {
   return {
@@ -180,10 +180,6 @@ describe('serpentineLayout', () => {
     assert.equal(nodes[1].waypoint, ws[1]);
     assert.equal(nodes[1].index, 1);
   });
-
-  test('NODE_R을 export한다', () => {
-    assert.equal(NODE_R, 14);
-  });
 });
 
 describe('renderRouteMap', () => {
@@ -219,12 +215,16 @@ describe('renderRouteMap', () => {
     assert.ok(!html.includes('· ·'));
   });
 
-  test('노드 테두리가 카테고리 색이고 채움은 표면색', () => {
+  test('카테고리 색은 테두리(stroke)로만 쓰이고 채움(fill) 속성으로는 쓰이지 않는다', () => {
     // 카테고리 색으로 채우고 흰 번호를 얹으면 6색 중 5색이 4.5:1에 미달한다.
+    // 채움은 style.css의 .rm-node { fill: var(--paper); } 가 담당한다 -- var()는
+    // SVG presentation attribute 문법에서 유효한 paint 값이 아니라서 fill 속성으로
+    // 직접 넣으면 무시되고 SVG 초기값인 검정으로 떨어진다(그러면 번호가 안 보인다).
+    // 그래서 fill 속성 자체가 없어야 한다.
     const html = renderRouteMap(one, opts);
     assert.ok(html.includes('stroke="#e87ba4"'), '놀이 색이 테두리여야 한다');
-    assert.ok(html.includes('fill="var(--paper)"'), '채움은 표면색이어야 한다');
     assert.ok(!html.includes('fill="#e87ba4"'), '카테고리 색으로 채우면 안 된다');
+    assert.ok(!html.includes('fill="var(--paper)"'), '채움을 attribute로 넣으면 안 된다 -- CSS에서 와야 한다');
   });
 
   test('번호가 1부터 매겨진다', () => {
@@ -291,5 +291,35 @@ describe('renderRouteMap', () => {
   test('노드가 하나면 연결선이 없다', () => {
     const html = renderRouteMap(one, opts);
     assert.equal((html.match(/class="rm-link"/g) || []).length, 0);
+  });
+
+  // 행 변경 연결선을 직선으로 그리면 cx가 양쪽에서 같으므로 위 노드의 라벨과
+  // 아래 노드의 날짜 칩을 그대로 관통한다. 곡선(path + C 커맨드)이어야 한다.
+  test('행이 바뀌는 연결선은 곡선(path)이고, 같은 행 안 연결선은 직선(line)이다', () => {
+    // A-B, B-C는 같은 행(PER_ROW=3)이라 직선, C-D는 다음 행으로 넘어가 곡선이다.
+    const html = renderRouteMap([
+      { label: 'A', category: '기타', date: '2026-08-10' },
+      { label: 'B', category: '기타', date: '2026-08-10' },
+      { label: 'C', category: '기타', date: '2026-08-10' },
+      { label: 'D', category: '기타', date: '2026-08-10' },
+    ], opts);
+    const lines = html.match(/<line class="rm-link"/g) || [];
+    const curves = html.match(/<path class="rm-link" d="[^"]*\bC\b[^"]*"/g) || [];
+    assert.equal(lines.length, 2, 'A-B, B-C는 직선이어야 한다');
+    assert.equal(curves.length, 1, 'C-D는 곡선(C 커맨드가 있는 path)이어야 한다');
+  });
+
+  test('행이 바뀌는 연결선은 캔버스 중심에서 먼 쪽으로 부푼다', () => {
+    // 7개면 0행(왼→오), 1행(오→왼), 2행(왼→오)이 생기고 행 변경이 둘 일어난다:
+    // 2→3은 cx=250(오른쪽 끝)이라 오른쪽으로, 5→6은 cx=50(왼쪽 끝)이라 왼쪽으로
+    // 부풀어야 한다. 좌표는 리뷰에서 실측한 값과 같다(연결선 y는 59~121).
+    const html = renderRouteMap(
+      Array.from({ length: 7 }, (_, i) => ({ label: `P${i}`, category: '기타', date: '2026-08-10' })),
+      opts,
+    );
+    const ds = [...html.matchAll(/<path class="rm-link" d="([^"]*)"/g)].map((m) => m[1]);
+    assert.equal(ds.length, 2, '행 변경 연결선이 둘이어야 한다');
+    assert.equal(ds[0], 'M250 59 C 284 59, 284 121, 250 121', '오른쪽 끝은 오른쪽으로 부풀어야 한다');
+    assert.equal(ds[1], 'M50 149 C 16 149, 16 211, 50 211', '왼쪽 끝은 왼쪽으로 부풀어야 한다');
   });
 });
