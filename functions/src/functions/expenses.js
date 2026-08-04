@@ -32,7 +32,14 @@ async function assertScheduleExists(db, tripId, scheduleId) {
   // client as a 500 INTERNAL_ERROR plus a console.error. A value that is not a
   // document id names no schedule, which is exactly what SCHEDULE_NOT_FOUND
   // already means.
-  if (typeof scheduleId !== 'string' || scheduleId === '') throw new Error('SCHEDULE_NOT_FOUND');
+  //
+  // A slash is rejected too. doc() reads its argument as a path, not an id, so
+  // 'a/b' throws the same unclassified Error ("even number of components") and
+  // 'a/b/c' quietly addresses a subcollection document instead. Schedule ids
+  // are opaque auto-ids, so a slash never appears in a legitimate one.
+  if (typeof scheduleId !== 'string' || scheduleId === '' || scheduleId.includes('/')) {
+    throw new Error('SCHEDULE_NOT_FOUND');
+  }
   const snap = await db.collection('trips').doc(tripId)
     .collection('schedules').doc(scheduleId)
     .get();

@@ -734,6 +734,11 @@ describe('expense scheduleId', () => {
     ['객체', {}],
     ['배열', []],
     ['불린', true],
+    // A non-empty string, so the type check alone lets it through. doc() reads
+    // it as a path: an odd component count throws the same unclassified Error,
+    // and an even one silently addresses a subcollection document.
+    ['슬래시', 'a/b'],
+    ['슬래시 짝수', 'a/b/c'],
   ];
 
   BAD_IDS.forEach(([label, bad]) => {
@@ -780,5 +785,19 @@ describe('expense scheduleId', () => {
     await expect(updateExpense(db, {
       sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: 123 },
     })).rejects.toThrow('SCHEDULE_NOT_FOUND');
+  });
+
+  // Same technique for the slash: the fake treats 'a/b' as a flat id, so parking
+  // a schedule there makes an ungated lookup succeed. Real Firestore could never
+  // hold such a document -- that is the point, since a path is what doc() would
+  // read the string as.
+  test('슬래시 scheduleId가 같은 이름의 문서에 연결되지 않는다', async () => {
+    const db = new FakeFirestore();
+    const t = await setup(db);
+    await t.tripRef.collection('schedules').doc('a/b').set({
+      planId: 'default', title: '슬래시 id', category: '놀이', date: '2026-08-11',
+      startMin: 660, endMin: 780, participants: [],
+    });
+    await expect(addExpense(db, base(t, { scheduleId: 'a/b' }))).rejects.toThrow('SCHEDULE_NOT_FOUND');
   });
 });
