@@ -5,6 +5,7 @@ import { renderReportInto } from './report.js';
 import { renderScheduleInto } from './schedule.js';
 import { formatDate } from '../format.js';
 import { CATEGORIES, categoryTag, categoryMark } from '../categories.js';
+import { mountExpenseSplit } from './expenseSplit.js';
 
 let currentTab = 'expenses';
 let renderToken = 0;
@@ -55,19 +56,21 @@ function render(root, slug) {
 
 async function renderExpensesTab(body, slug, myToken) {
   body.innerHTML = `
-    <div style="margin-bottom:1rem"><button type="button" class="btn btn-primary" id="member-add-expense">경비 입력</button></div>
+    <div style="margin-bottom:1rem"><button type="button" class="btn btn-primary" id="member-add-expense" disabled>경비 입력</button></div>
     <div id="member-expenses-list"></div>`;
-  document.getElementById('member-add-expense').addEventListener('click', () => openExpenseModal(body, slug));
   await loadExpenses(body, slug, myToken);
 }
 
 async function loadExpenses(body, slug, myToken) {
   const session = getSession();
-  let expenses, members;
+  let expenses, members, scheduleData;
   try {
-    [expenses, members] = await Promise.all([
+    [expenses, members, scheduleData] = await Promise.all([
       callFunction('listExpenses', { tripId: session.tripId }),
       callFunction('listMembersForLogin', { slug }),
+      // A schedules failure must not take down the expense list; the picker
+      // simply does not appear.
+      callFunction('listSchedules', { tripId: session.tripId }).catch(() => ({ schedules: [] })),
     ]);
   } catch (err) {
     if (myToken !== renderToken) return;
@@ -123,7 +126,7 @@ async function loadExpenses(body, slug, myToken) {
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const exp = expenses.find((x) => x.id === btn.dataset.id);
-      openMemberExpenseEditModal(body, slug, exp);
+      openMemberExpenseEditModal(body, slug, exp, members, scheduleData.schedules);
     });
   });
 
@@ -154,6 +157,13 @@ async function loadExpenses(body, slug, myToken) {
       }
     });
   });
+
+  // The add button is created once by renderExpensesTab and survives every
+  // loadExpenses call, so assignment -- not addEventListener -- is what keeps
+  // one handler on it instead of one per reload.
+  const addBtn = body.querySelector('#member-add-expense');
+  addBtn.disabled = false;
+  addBtn.onclick = () => openExpenseModal(body, slug, members, scheduleData.schedules);
 }
 
 async function renderMembersTab(body, slug, myToken) {
@@ -176,11 +186,16 @@ async function renderMembersTab(body, slug, myToken) {
     </div>`).join('');
 }
 
-function openExpenseModal(body, slug) {
+function openExpenseModal(body, slug, members, schedules) {
   let category = CATEGORIES[1];
   let photoPath = null;
   let classifyPromise = null;
   let skipped = false;
+  // Set once the user picks a schedule. A late OCR response must not overwrite
+  // the category and date that pick just established -- but amount, merchant
+  // and detail still come from the receipt and are still applied.
+  let scheduleChosen = false;
+  let split = null;
 
   openModal('경비 입력', `
     <div class="field"><label class="label">사진</label><input type="file" accept="image/*" id="me-photo"></div>
@@ -190,6 +205,7 @@ function openExpenseModal(body, slug) {
     <div class="field"><label class="label">금액</label><input type="number" class="input" id="me-amount"></div>
     <div class="field"><label class="label">상호명</label><input class="input" id="me-merchant"></div>
     <div class="field"><label class="label">세부사항</label><input class="input" id="me-detail"></div>
+    <div id="me-split"></div>
     <button type="button" class="btn btn-primary btn-block" id="me-submit">입력 완료</button>
     <p class="muted" id="me-error" style="margin-top:0.5rem;font-size:13px"></p>
   `);
@@ -201,6 +217,13 @@ function openExpenseModal(body, slug) {
     }, { dotColor: categoryMark });
   }
   rerenderCategoryChips();
+
+  split = mountExpenseSplit(document.getElementById('me-split'), { members, schedules });
+  split.onSchedulePick(({ category: c, date }) => {
+    scheduleChosen = true;
+    if (c) { category = c; rerenderCategoryChips(); }
+    if (date) document.getElementById('me-date').value = date;
+  });
 
   ['me-amount', 'me-merchant', 'me-detail'].forEach((id) => {
     document.getElementById(id).addEventListener('keydown', (e) => {
@@ -234,8 +257,8 @@ function openExpenseModal(body, slug) {
           if (classification.classified === false) {
             showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
           } else {
-            if (classification.category) { category = classification.category; rerenderCategoryChips(); }
-            if (classification.date) document.getElementById('me-date').value = classification.date;
+            if (!scheduleChosen && classification.category) { category = classification.category; rerenderCategoryChips(); }
+            if (!scheduleChosen && classification.date) document.getElementById('me-date').value = classification.date;
             if (classification.amount) document.getElementById('me-amount').value = classification.amount;
             if (classification.merchant) document.getElementById('me-merchant').value = classification.merchant;
             if (classification.detail) document.getElementById('me-detail').value = classification.detail;
@@ -269,6 +292,8 @@ function openExpenseModal(body, slug) {
         merchant: document.getElementById('me-merchant').value,
         detail: document.getElementById('me-detail').value,
         photoPath,
+        scheduleId: split.getScheduleId(),
+        excludedMembers: split.getExcludedMembers(),
       });
       closeModal();
       await loadExpenses(body, slug, renderToken);
@@ -279,7 +304,7 @@ function openExpenseModal(body, slug) {
   });
 }
 
-function openMemberExpenseEditModal(body, slug, exp) {
+function openMemberExpenseEditModal(body, slug, exp, members, schedules) {
   let category = exp.category;
   const session = getSession();
 
@@ -289,6 +314,7 @@ function openMemberExpenseEditModal(body, slug, exp) {
     <div class="field"><label class="label">금액</label><input type="number" class="input" id="mee-amount" value="${Number(exp.amount) || ''}"></div>
     <div class="field"><label class="label">상호명</label><input class="input" id="mee-merchant" value="${escapeHtml(exp.merchant || '')}"></div>
     <div class="field"><label class="label">세부사항</label><input class="input" id="mee-detail" value="${escapeHtml(exp.detail || '')}"></div>
+    <div id="mee-split"></div>
     <button type="button" class="btn btn-primary btn-block" id="mee-submit">저장</button>
     <p class="muted" id="mee-error" style="margin-top:0.5rem;font-size:13px"></p>
   `);
@@ -300,6 +326,17 @@ function openMemberExpenseEditModal(body, slug, exp) {
     }, { dotColor: categoryMark });
   }
   rerenderChips();
+
+  const split = mountExpenseSplit(document.getElementById('mee-split'), {
+    members,
+    schedules,
+    scheduleId: exp.scheduleId || null,
+    excludedMembers: exp.excludedMembers || [],
+  });
+  split.onSchedulePick(({ category: c, date }) => {
+    if (c) { category = c; rerenderChips(); }
+    if (date) document.getElementById('mee-date').value = date;
+  });
 
   ['mee-amount', 'mee-merchant', 'mee-detail'].forEach((id) => {
     document.getElementById(id).addEventListener('keydown', (e) => {
@@ -320,6 +357,8 @@ function openMemberExpenseEditModal(body, slug, exp) {
           amount: Number(document.getElementById('mee-amount').value),
           merchant: document.getElementById('mee-merchant').value,
           detail: document.getElementById('mee-detail').value,
+          scheduleId: split.getScheduleId(),
+          excludedMembers: split.getExcludedMembers(),
         },
       });
       closeModal();
