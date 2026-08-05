@@ -19,6 +19,33 @@ function isValidPhotoPath(tripId, photoPath) {
   return PHOTO_PATH_SUFFIX_RE.test(photoPath.slice(prefix.length));
 }
 
+/**
+ * A linked schedule must belong to this same trip. Accepting another trip's id
+ * would let one trip's expense inherit a participant list made of people who
+ * are not members here.
+ */
+async function assertScheduleExists(db, tripId, scheduleId) {
+  if (scheduleId === null || scheduleId === undefined) return;
+  // Reject before the value reaches doc(). Firestore's validateResourcePath
+  // throws a plain "not a valid resource path" Error for a non-string or empty
+  // id; that message matches no rule in toHttpsError, so it would reach the
+  // client as a 500 INTERNAL_ERROR plus a console.error. A value that is not a
+  // document id names no schedule, which is exactly what SCHEDULE_NOT_FOUND
+  // already means.
+  //
+  // A slash is rejected too. doc() reads its argument as a path, not an id, so
+  // 'a/b' throws the same unclassified Error ("even number of components") and
+  // 'a/b/c' quietly addresses a subcollection document instead. Schedule ids
+  // are opaque auto-ids, so a slash never appears in a legitimate one.
+  if (typeof scheduleId !== 'string' || scheduleId === '' || scheduleId.includes('/')) {
+    throw new Error('SCHEDULE_NOT_FOUND');
+  }
+  const snap = await db.collection('trips').doc(tripId)
+    .collection('schedules').doc(scheduleId)
+    .get();
+  if (!snap.exists) throw new Error('SCHEDULE_NOT_FOUND');
+}
+
 async function listExpenses(db, data) {
   await requireSession(db, data.sessionToken, ['admin', 'member'], data.tripId);
   const snap = await db.collection('trips').doc(data.tripId).collection('expenses').get();
@@ -38,6 +65,9 @@ async function addExpense(db, data) {
 
   const excludedMembers = data.excludedMembers || [];
   await assertMemberIdsExist(db, tripId, excludedMembers, 'INVALID_EXCLUDED_MEMBERS');
+
+  const scheduleId = data.scheduleId ?? null;
+  await assertScheduleExists(db, tripId, scheduleId);
 
   let enteredBy;
   if (session.role === 'member') {
@@ -59,6 +89,7 @@ async function addExpense(db, data) {
     recordedBy: session.role,
     photoPath: photoPath || null,
     excludedMembers,
+    scheduleId,
     confirmed: false,
     confirmedAt: null,
     isWaypoint: false,
@@ -106,6 +137,18 @@ async function updateExpense(db, data) {
   if ('excludedMembers' in patch) {
     await assertMemberIdsExist(db, tripId, patch.excludedMembers, 'INVALID_EXCLUDED_MEMBERS');
     update.excludedMembers = patch.excludedMembers;
+  }
+  if ('scheduleId' in patch) {
+    const next = patch.scheduleId ?? null;
+    // Only a genuinely new link is validated. The widget deliberately keeps a
+    // stored scheduleId whose schedule has since been deleted -- it shows
+    // "(연결 안 함)" but resends the old id, so validating an unchanged value
+    // would reject every future save of that expense, including edits that
+    // never touched the link. Worse, when the deleted schedule was the trip's
+    // only dated one the picker is not rendered at all, leaving no control that
+    // could clear the id and no way to ever save the expense again.
+    if (next !== (expense.scheduleId ?? null)) await assertScheduleExists(db, tripId, next);
+    update.scheduleId = next;
   }
 
   update.updatedAt = Date.now();

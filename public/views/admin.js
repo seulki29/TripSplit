@@ -5,6 +5,7 @@ import { renderReportInto } from './report.js';
 import { renderScheduleInto } from './schedule.js';
 import { formatDate } from '../format.js';
 import { CATEGORIES, categoryTag, categoryMark } from '../categories.js';
+import { mountExpenseSplit } from './expenseSplit.js';
 
 let currentTab = 'setup';
 let membersCache = [];
@@ -209,12 +210,15 @@ function openMemberModal(body, slug, member) {
 
 async function renderExpensesTab(body, slug, myToken) {
   const session = getSession();
-  let expenses, members, trip;
+  let expenses, members, trip, scheduleData;
   try {
-    [expenses, members, trip] = await Promise.all([
+    [expenses, members, trip, scheduleData] = await Promise.all([
       callFunction('listExpenses', { tripId: session.tripId }),
       callFunction('listMembersForLogin', { slug }),
       callFunction('getTripSetup', { tripId: session.tripId }),
+      // A schedules failure must not take down the expense tab; the picker
+      // simply does not appear.
+      callFunction('listSchedules', { tripId: session.tripId }).catch(() => ({ schedules: [] })),
     ]);
   } catch (err) {
     if (myToken !== renderToken) return;
@@ -294,7 +298,7 @@ async function renderExpensesTab(body, slug, myToken) {
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const exp = expenses.find((x) => x.id === btn.dataset.id);
-      openAdminExpenseEditModal(body, slug, exp);
+      openAdminExpenseEditModal(body, slug, exp, members, scheduleData.schedules);
     });
   });
   body.querySelectorAll('.btn-waypoint').forEach((btn) => {
@@ -328,7 +332,7 @@ async function renderExpensesTab(body, slug, myToken) {
     });
   });
   if (!locked) {
-    document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members));
+    document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members, scheduleData.schedules));
 
     document.getElementById('expense-exclusion-toggle').addEventListener('click', () => {
       exclusionMode = !exclusionMode;
@@ -384,11 +388,16 @@ function openExclusionModal(body, slug, members, expenses, checkedIds) {
   });
 }
 
-function openAdminExpenseModal(body, slug, members) {
+function openAdminExpenseModal(body, slug, members, schedules) {
   let category = CATEGORIES[1];
   let photoPath = null;
   let classifyPromise = null;
   let skipped = false;
+  // Set once the user picks a schedule. A late OCR response must not overwrite
+  // the category and date that pick just established -- but amount, merchant
+  // and detail still come from the receipt and are still applied.
+  let scheduleChosen = false;
+  let split = null;
 
   openModal('경비 입력', `
     <div class="field"><label class="label">사진</label><input type="file" accept="image/*" id="ae-photo"></div>
@@ -401,6 +410,7 @@ function openAdminExpenseModal(body, slug, members) {
     <div class="field"><label class="label">금액</label><input type="number" class="input" id="ae-amount"></div>
     <div class="field"><label class="label">상호명</label><input class="input" id="ae-merchant"></div>
     <div class="field"><label class="label">세부사항</label><input class="input" id="ae-detail"></div>
+    <div id="ae-split"></div>
     <button type="button" class="btn btn-primary btn-block" id="ae-submit">입력 완료</button>
     <p class="muted" id="ae-error" style="margin-top:0.5rem;font-size:13px"></p>
   `);
@@ -412,6 +422,13 @@ function openAdminExpenseModal(body, slug, members) {
     }, { dotColor: categoryMark });
   }
   rerenderCategoryChips();
+
+  split = mountExpenseSplit(document.getElementById('ae-split'), { members, schedules });
+  split.onSchedulePick(({ category: c, date }) => {
+    scheduleChosen = true;
+    if (c) { category = c; rerenderCategoryChips(); }
+    if (date) document.getElementById('ae-date').value = date;
+  });
 
   ['ae-amount', 'ae-merchant', 'ae-detail'].forEach((id) => {
     document.getElementById(id).addEventListener('keydown', (e) => {
@@ -445,8 +462,8 @@ function openAdminExpenseModal(body, slug, members) {
           if (classification.classified === false) {
             showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
           } else {
-            if (classification.category) { category = classification.category; rerenderCategoryChips(); }
-            if (classification.date) document.getElementById('ae-date').value = classification.date;
+            if (!scheduleChosen && classification.category) { category = classification.category; rerenderCategoryChips(); }
+            if (!scheduleChosen && classification.date) document.getElementById('ae-date').value = classification.date;
             if (classification.amount) document.getElementById('ae-amount').value = classification.amount;
             if (classification.merchant) document.getElementById('ae-merchant').value = classification.merchant;
             if (classification.detail) document.getElementById('ae-detail').value = classification.detail;
@@ -481,6 +498,8 @@ function openAdminExpenseModal(body, slug, members) {
         merchant: document.getElementById('ae-merchant').value,
         detail: document.getElementById('ae-detail').value,
         photoPath,
+        scheduleId: split.getScheduleId(),
+        excludedMembers: split.getExcludedMembers(),
       });
       closeModal();
       try {
@@ -495,7 +514,7 @@ function openAdminExpenseModal(body, slug, members) {
   });
 }
 
-function openAdminExpenseEditModal(body, slug, exp) {
+function openAdminExpenseEditModal(body, slug, exp, members, schedules) {
   let category = exp.category;
   openModal('경비 수정', `
     <div class="field"><label class="label">카테고리</label><div id="ee-category"></div></div>
@@ -503,6 +522,7 @@ function openAdminExpenseEditModal(body, slug, exp) {
     <div class="field"><label class="label">금액</label><input type="number" class="input" id="ee-amount" value="${Number(exp.amount) || ''}"></div>
     <div class="field"><label class="label">상호명</label><input class="input" id="ee-merchant" value="${escapeHtml(exp.merchant || '')}"></div>
     <div class="field"><label class="label">세부사항</label><input class="input" id="ee-detail" value="${escapeHtml(exp.detail || '')}"></div>
+    <div id="ee-split"></div>
     <button type="button" class="btn btn-primary btn-block" id="ee-submit">저장</button>
     <p class="muted" id="ee-error" style="margin-top:0.5rem;font-size:13px"></p>
   `);
@@ -511,6 +531,17 @@ function openAdminExpenseEditModal(body, slug, exp) {
     renderChipGroup(document.getElementById('ee-category'), CATEGORIES, category, (c) => { category = c; rerenderChips(); }, { dotColor: categoryMark });
   }
   rerenderChips();
+
+  const split = mountExpenseSplit(document.getElementById('ee-split'), {
+    members,
+    schedules,
+    scheduleId: exp.scheduleId || null,
+    excludedMembers: exp.excludedMembers || [],
+  });
+  split.onSchedulePick(({ category: c, date }) => {
+    if (c) { category = c; rerenderChips(); }
+    if (date) document.getElementById('ee-date').value = date;
+  });
 
   ['ee-amount', 'ee-merchant', 'ee-detail'].forEach((id) => {
     document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('ee-submit').click(); });
@@ -529,6 +560,8 @@ function openAdminExpenseEditModal(body, slug, exp) {
           amount: Number(document.getElementById('ee-amount').value),
           merchant: document.getElementById('ee-merchant').value,
           detail: document.getElementById('ee-detail').value,
+          scheduleId: split.getScheduleId(),
+          excludedMembers: split.getExcludedMembers(),
         },
       });
       closeModal();

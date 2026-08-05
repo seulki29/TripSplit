@@ -1,5 +1,5 @@
 const { requireSession } = require('../lib/sessions');
-const { computeSettlement, allocateInteger } = require('../lib/settlement');
+const { computeSettlement, allocateInteger, sharersOf } = require('../lib/settlement');
 
 async function loadTripBundle(db, tripId) {
   const membersSnap = await db.collection('trips').doc(tripId).collection('members').get();
@@ -19,8 +19,7 @@ function perPersonCategoryAverage(members, expenses) {
   const memberHasDue = new Set();
 
   for (const e of confirmed) {
-    const excluded = new Set(e.excludedMembers || []);
-    const eligible = members.filter((m) => !excluded.has(m.id));
+    const eligible = sharersOf(members, e);
     const allocation = allocateInteger(e.amount, eligible.map((m) => ({ id: m.id, weight: m.weight })));
     for (const a of allocation) {
       if (a.amount > 0) memberHasDue.add(a.id);

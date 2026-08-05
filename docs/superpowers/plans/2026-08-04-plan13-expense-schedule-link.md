@@ -377,7 +377,9 @@ node --check public/views/expenseSplit.js
 npm test
 ```
 
-Expected: `--check`는 무출력, `npm test`는 198 통과(184 + Task 1의 14). 위젯 자체는 DOM이라 단위 테스트가 없다 — 이 프로젝트는 프론트 단위 테스트를 순수 모듈에만 매기고 DOM은 육안으로 확인한다. **테스트 하네스를 새로 만들지 말 것.**
+Expected: `--check`는 무출력, `npm test`는 198 통과(184 + Task 1의 14).
+
+> **정정 (실행 중 확인):** 위 문장의 원래 근거 — "이 프로젝트는 프론트 단위 테스트를 순수 모듈에만 매긴다" — 는 **사실이 아니다.** `public/test/ui.test.js`가 이미 jsdom으로 `openModal`/`closeModal`/`renderChipGroup` 같은 DOM 코드를 단위 테스트하고 있고, `jsdom`은 이미 루트 `devDependencies`에 있다. 따라서 `mountExpenseSplit`도 **새 하네스나 새 의존성 없이** `ui.test.js`의 기존 패턴을 따라 테스트할 수 있다. Task 2는 이 잘못된 전제 위에서 테스트 없이 진행됐다.
 
 - [ ] **Step 4: 커밋한다**
 
