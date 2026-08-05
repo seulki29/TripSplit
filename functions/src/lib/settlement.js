@@ -24,6 +24,28 @@ function allocateInteger(total, weights) {
   return raw.map((r) => ({ id: r.id, amount: r.floor + (bumped.has(r.id) ? 1 : 0) }));
 }
 
+/**
+ * Who actually shares an expense.
+ *
+ * Normally that is everyone not in `excludedMembers`. When the exclusion list
+ * covers everyone, the payer bears it alone rather than nobody bearing it: an
+ * expense with no sharers still counts as paid, so leaving it unallocated makes
+ * the report stop balancing -- the sum of every member's net must be 0 for a
+ * settlement to be settleable, and an unshared amount pushes it off by exactly
+ * that amount. "Nobody else is splitting this" is a real intent (a personal
+ * purchase entered for the record), and this is what it means.
+ *
+ * If the payer is no longer a member of the trip there is nobody left to charge
+ * and the amount stays unallocated -- the same gap a deleted payer already
+ * leaves in `paidByMember`, and not something this function can close.
+ */
+function sharersOf(members, expense) {
+  const excluded = new Set(expense.excludedMembers || []);
+  const eligible = members.filter((m) => !excluded.has(m.id));
+  if (eligible.length > 0) return eligible;
+  return members.filter((m) => m.id === expense.enteredBy);
+}
+
 function computeSettlement(members, expenses) {
   const confirmed = expenses.filter((e) => e.confirmed);
 
@@ -37,8 +59,7 @@ function computeSettlement(members, expenses) {
   for (const m of members) { dueByMember[m.id] = 0; breakdownByMember[m.id] = []; }
 
   for (const e of confirmed) {
-    const excluded = new Set(e.excludedMembers || []);
-    const eligible = members.filter((m) => !excluded.has(m.id));
+    const eligible = sharersOf(members, e);
     const weights = eligible.map((m) => ({ id: m.id, weight: m.weight }));
     const allocation = allocateInteger(e.amount, weights);
     for (const a of allocation) {
@@ -72,4 +93,4 @@ function computeSettlement(members, expenses) {
   return { categoryTotals, totalConfirmed, perMember };
 }
 
-module.exports = { computeSettlement, allocateInteger };
+module.exports = { computeSettlement, allocateInteger, sharersOf };

@@ -97,6 +97,27 @@ describe('perPersonCategoryAverage', () => {
     expect(averages['식비']).toBe(20000); // 60000 / 3
     expect(averages['숙박']).toBe(30000); // 90000 / 3
   });
+
+  // Mirrors the settlement rule: with nobody sharing, the payer carries it, so
+  // the amount still lands in its category instead of vanishing from the report.
+  test('an expense excluding everyone is charged to the payer', () => {
+    const members = [
+      { id: 'a', name: 'A', weight: 1 },
+      { id: 'b', name: 'B', weight: 1 },
+    ];
+    const expenses = [
+      {
+        category: '식비', amount: 40000, enteredBy: 'a', confirmed: true, excludedMembers: [],
+      },
+      {
+        category: '기타', amount: 30000, enteredBy: 'b', confirmed: true, excludedMembers: ['a', 'b'],
+      },
+    ];
+
+    const { averages } = perPersonCategoryAverage(members, expenses);
+    expect(averages['식비']).toBe(20000); // 40000 / 2
+    expect(averages['기타']).toBe(15000); // 30000 carried by b, / 2 members with due
+  });
 });
 
 describe('getReportData', () => {
