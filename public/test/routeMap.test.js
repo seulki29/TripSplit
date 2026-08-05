@@ -136,44 +136,44 @@ describe('serpentineLayout', () => {
     assert.deepEqual(nodes, []);
   });
 
-  test('캔버스 폭은 320으로 고정', () => {
-    assert.equal(serpentineLayout(waypoints(5)).width, 320);
+  test('캔버스 폭은 336으로 고정', () => {
+    assert.equal(serpentineLayout(waypoints(5)).width, 336);
   });
 
   test('0행은 좌에서 우로, 한 행에 4개', () => {
     const { nodes } = serpentineLayout(waypoints(4));
-    assert.deepEqual(nodes.map((n) => n.cx), [40, 120, 200, 280]);
+    assert.deepEqual(nodes.map((n) => n.cx), [48, 128, 208, 288]);
     assert.deepEqual(nodes.map((n) => n.cy), [52, 52, 52, 52]);
   });
 
   // 지그재그의 핵심. 1행은 방향이 뒤집혀 오른쪽 끝에서 시작한다.
   test('1행은 우에서 좌로', () => {
     const { nodes } = serpentineLayout(waypoints(8));
-    assert.deepEqual(nodes.slice(4).map((n) => n.cx), [280, 200, 120, 40]);
-    assert.deepEqual(nodes.slice(4).map((n) => n.cy), [142, 142, 142, 142]);
+    assert.deepEqual(nodes.slice(4).map((n) => n.cx), [288, 208, 128, 48]);
+    assert.deepEqual(nodes.slice(4).map((n) => n.cy), [140, 140, 140, 140]);
   });
 
   test('5번째 노드는 1행 오른쪽 끝, 4번째 바로 아래', () => {
     const { nodes } = serpentineLayout(waypoints(5));
-    assert.equal(nodes[4].cx, 280);
-    assert.equal(nodes[3].cx, 280);
+    assert.equal(nodes[4].cx, 288);
+    assert.equal(nodes[3].cx, 288);
     assert.equal(nodes[4].row, 1);
   });
 
   test('9번째 노드는 2행 왼쪽 끝, 8번째 바로 아래', () => {
     const { nodes } = serpentineLayout(waypoints(9));
-    assert.equal(nodes[8].cx, 40);
-    assert.equal(nodes[7].cx, 40);
-    assert.equal(nodes[8].cy, 232);
+    assert.equal(nodes[8].cx, 48);
+    assert.equal(nodes[7].cx, 48);
+    assert.equal(nodes[8].cy, 228);
   });
 
   // 높이는 마지막 행의 앵커에서 라벨 두 줄 아래까지만 잡는다. 한 행짜리
   // 지도 밑에 빈 행 하나만큼의 여백이 남지 않도록.
   test('높이는 행 수에 비례하되 마지막 행은 라벨까지만', () => {
-    assert.equal(serpentineLayout(waypoints(1)).height, 82);
-    assert.equal(serpentineLayout(waypoints(4)).height, 82);
+    assert.equal(serpentineLayout(waypoints(1)).height, 84);
+    assert.equal(serpentineLayout(waypoints(4)).height, 84);
     assert.equal(serpentineLayout(waypoints(5)).height, 172);
-    assert.equal(serpentineLayout(waypoints(9)).height, 262);
+    assert.equal(serpentineLayout(waypoints(9)).height, 260);
   });
 
   test('노드가 원래 경유지와 인덱스를 들고 있다', () => {
@@ -200,7 +200,7 @@ describe('renderRouteMap', () => {
   test('경유지가 있으면 SVG를 낸다', () => {
     const html = renderRouteMap(one, opts);
     assert.ok(html.includes('<svg'));
-    assert.ok(html.includes('viewBox="0 0 320 82"'));
+    assert.ok(html.includes('viewBox="0 0 336 84"'));
   });
 
   test('머리말에 기간·개수·지역이 들어간다', () => {
@@ -217,25 +217,33 @@ describe('renderRouteMap', () => {
     assert.ok(!html.includes('· ·'));
   });
 
-  test('카테고리 색은 테두리(stroke)로만 쓰이고 채움(fill) 속성으로는 쓰이지 않는다', () => {
-    // 카테고리 색으로 채우고 흰 번호를 얹으면 6색 중 5색이 4.5:1에 미달한다.
-    // 채움은 style.css의 .rm-node { fill: var(--paper); } 가 담당한다 -- var()는
-    // SVG presentation attribute 문법에서 유효한 paint 값이 아니라서 fill 속성으로
-    // 직접 넣으면 무시되고 SVG 초기값인 검정으로 떨어진다(그러면 번호가 안 보인다).
-    // 그래서 fill 속성 자체가 없어야 한다.
+  // 예전엔 카테고리 색을 테두리로만 썼다. 핀 안에 흰 번호가 있었고, 그 색으로
+  // 채우면 6색 중 5색이 4.5:1에 미달했기 때문이다. 번호가 없어지면서 그 제약이
+  // 풀렸고, 이제 색이 면적을 갖는다.
+  test('카테고리 색이 핀의 채움(fill)이다', () => {
     const html = renderRouteMap(one, opts);
-    assert.ok(html.includes('stroke="#e87ba4"'), '놀이 색이 테두리여야 한다');
-    assert.ok(!html.includes('fill="#e87ba4"'), '카테고리 색으로 채우면 안 된다');
-    assert.ok(!html.includes('fill="var(--paper)"'), '채움을 attribute로 넣으면 안 된다 -- CSS에서 와야 한다');
+    assert.ok(html.includes('fill="#e87ba4"'), '놀이 색으로 채워야 한다');
+    assert.ok(!html.includes('stroke="#e87ba4"'), '테두리로 쓰면 안 된다');
   });
 
-  test('번호가 1부터 매겨진다', () => {
+  test('뚫린 구멍의 색은 attribute가 아니라 CSS에서 온다', () => {
+    // var()는 SVG presentation attribute 문법에서 유효한 paint 값이 아니다.
+    // fill="var(--paper)" 로 넣으면 무시되고 SVG 초기값인 검정으로 떨어져서,
+    // 구멍이 뚫린 게 아니라 검은 점이 찍힌 것처럼 보인다.
+    const html = renderRouteMap(one, opts);
+    assert.ok(html.includes('class="rm-hole"'), '구멍 요소가 있어야 한다');
+    assert.ok(!html.includes('fill="var('), 'var()를 attribute로 넣으면 안 된다');
+  });
+
+  // 번호는 뺐다. 선이 이미 무엇과 무엇이 이어지는지 보여준다.
+  test('핀에 번호를 넣지 않는다', () => {
     const html = renderRouteMap([
       { label: 'A', category: '기타', date: '2026-08-10' },
       { label: 'B', category: '기타', date: '2026-08-10' },
     ], opts);
-    assert.ok(html.includes('>1</text>'));
-    assert.ok(html.includes('>2</text>'));
+    assert.ok(!html.includes('>1</text>'));
+    assert.ok(!html.includes('>2</text>'));
+    assert.ok(!html.includes('rm-num'));
   });
 
   test('장소명을 이스케이프한다', () => {
@@ -303,36 +311,47 @@ describe('renderRouteMap', () => {
       Array.from({ length: 5 }, (_, i) => ({ label: `P${i}`, category: '기타', date: '2026-08-10' })),
       opts,
     );
-    assert.equal(routePath(html), 'M40 52 L120 52 L200 52 L280 52 C310 52, 310 142, 280 142');
+    assert.equal(routePath(html), 'M48 52 L128 52 L208 52 L288 52 C347 52, 347 140, 288 140');
   });
 
   test('행이 바뀌는 구간은 캔버스 중심에서 먼 쪽으로 부푼다', () => {
-    // 9개면 행 변경이 둘 일어난다: 3→4는 cx=280(오른쪽 끝)이라 오른쪽(310)으로,
-    // 7→8은 cx=40(왼쪽 끝)이라 왼쪽(10)으로 부풀어야 다음 행 핀을 비껴간다.
+    // 9개면 행 변경이 둘 일어난다: 3→4는 cx=288(오른쪽 끝)이라 오른쪽으로,
+    // 7→8은 cx=48(왼쪽 끝)이라 왼쪽으로 부풀어야 다음 행 핀을 비껴간다.
+    // 제어점 x는 캔버스 밖(-11)까지 나가지만 곡선 자체는 3.75까지만 간다 --
+    // 단일 3차 베지어는 현에서 0.75*k 만큼만 부푼다.
     const html = renderRouteMap(
       Array.from({ length: 9 }, (_, i) => ({ label: `P${i}`, category: '기타', date: '2026-08-10' })),
       opts,
     );
     const d = routePath(html);
-    assert.ok(d.includes('C310 52, 310 142, 280 142'), '오른쪽 끝은 오른쪽으로 부풀어야 한다');
-    assert.ok(d.includes('C10 142, 10 232, 40 232'), '왼쪽 끝은 왼쪽으로 부풀어야 한다');
+    assert.ok(d.includes('C347 52, 347 140, 288 140'), '오른쪽 끝은 오른쪽으로 부풀어야 한다');
+    assert.ok(d.includes('C-11 140, -11 228, 48 228'), '왼쪽 끝은 왼쪽으로 부풀어야 한다');
   });
 
   // 핀 끝이 앵커에 놓이고 풍선이 그 위로 뜬다 -- 선이 앵커를 지나가므로
   // "선에 꽂힌 핀"으로 읽힌다. 원이 선 위에 얹혀 있던 이전 모양과 다르다.
   test('마커는 원이 아니라 끝점이 앵커에 놓인 핀이다', () => {
     const html = renderRouteMap(one, opts);
-    assert.ok(!html.includes('<circle'), '원이 남아 있으면 안 된다');
     const pin = (html.match(/<path class="rm-node" d="([^"]*)"/) || [])[1];
     assert.ok(pin, '핀 path가 있어야 한다');
-    assert.ok(pin.startsWith('M40 52'), `핀이 앵커(40,52)에서 시작해야 한다: ${pin}`);
-    assert.ok(pin.includes('A11 11'), '풍선이 반지름 11 호여야 한다');
+    assert.ok(pin.startsWith('M48 52'), `핀이 앵커(48,52)에서 시작해야 한다: ${pin}`);
+    assert.ok(pin.includes('A12 12'), '풍선이 반지름 12 호여야 한다');
     assert.ok(pin.trim().endsWith('Z'), '닫힌 도형이어야 한다');
   });
 
-  test('번호는 핀 끝이 아니라 풍선 안에 찍힌다', () => {
+  // 옆면이 풍선의 가장 넓은 지점(cx±R, 풍선 중심 높이)에서 수직으로 내려와야
+  // 배가 생긴다. 접선을 중간에 걸면 몸통이 홀쭉해진다.
+  test('핀 옆면이 풍선의 가장 넓은 지점에서 시작한다', () => {
     const html = renderRouteMap(one, opts);
-    // 앵커 52, 풍선 중심은 그 위 26 -> 26. baseline은 시각적 중앙 보정으로 +4.
-    assert.ok(html.includes('<text class="rm-num" x="40" y="30">1</text>'), html);
+    const pin = (html.match(/<path class="rm-node" d="([^"]*)"/) || [])[1];
+    // 풍선 중심 y = 52 - 21.6 = 30.4, 좌우 끝은 x = 48 ∓ 12
+    assert.ok(pin.includes('36 30.4'), `왼쪽 끝이 (36, 30.4)여야 한다: ${pin}`);
+    assert.ok(pin.includes('60 30.4'), `오른쪽 끝이 (60, 30.4)여야 한다: ${pin}`);
+  });
+
+  test('구멍은 풍선 중심에 놓인다', () => {
+    const html = renderRouteMap(one, opts);
+    // 앵커 52에서 PIN_H(21.6)만큼 위 -> 30.4. 반지름은 0.45 * 12 = 5.4.
+    assert.ok(html.includes('<circle class="rm-hole" cx="48" cy="30.4" r="5.4">'), html);
   });
 });

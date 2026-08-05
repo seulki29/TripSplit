@@ -364,19 +364,25 @@ h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 
 /* ---- Route map ---- */
 .rm-caption { font-size: 12px; margin-bottom: 0.6rem; }
-/* The viewBox is 320 units wide. Without a cap the SVG stretches to the
+/* The viewBox is 336 units wide. Without a cap the SVG stretches to the
    container (up to 960px), scaling the 9-unit labels past body-text size on a
-   desktop. 400px keeps the drawing near 1:1 at both ends: ~1.07x on a 375px
-   phone, 1.25x capped on a wide screen. */
+   desktop. 420px holds the same 1.25x it had at 320/400, so widening the canvas
+   for the row-change curve costs nothing on a desktop; on a 375px phone the
+   drawing is width-bound either way and lands at ~1.12x. */
 .rm-svg {
-  width: 100%; max-width: 400px; height: auto; display: block; margin: 0 auto;
+  width: 100%; max-width: 420px; height: auto; display: block; margin: 0 auto;
 }
-.rm-link { stroke: var(--rule); stroke-width: 2; fill: none; }
-.rm-node { fill: var(--paper); stroke-width: 2.5; }
-.rm-num {
-  fill: var(--ink); font-size: 11px; font-weight: 600;
-  text-anchor: middle; font-family: var(--f-body);
+/* The route reads as a path travelled, not a hairline connector, so it is
+   stroked heavily in a mid neutral. --rule is too pale to survive at this
+   width; --ink-3 holds up without competing with the filled pins. Round caps
+   keep the single open path from ending in a blunt edge. */
+.rm-link {
+  stroke: var(--ink-3); stroke-width: 6; fill: none; stroke-linecap: round;
 }
+/* .rm-node's fill is the category colour, set as an attribute in routeMap.js.
+   Only the punched hole needs a token, and it has to come from CSS -- var() is
+   not valid in SVG's presentation attribute grammar. */
+.rm-hole { fill: var(--paper); }
 .rm-label {
   fill: var(--ink-2); font-size: 9px; text-anchor: middle;
   font-family: var(--f-body);
