@@ -3,8 +3,9 @@
  * largest-remainder method, so the shares always add back up to `total`
  * exactly — no leftover 원 and no overshoot.
  *
- * A weight sum of zero (every eligible member excluded from the category)
- * allocates nothing, matching the documented all-excluded edge case.
+ * A weight sum of zero allocates nothing. Callers must not reach this with an
+ * expense that has to be paid for -- see sharersOf, which resolves "nobody can
+ * carry this" to the payer before allocation.
  */
 function allocateInteger(total, weights) {
   const weightSum = weights.reduce((sum, w) => sum + w.weight, 0);
@@ -27,13 +28,23 @@ function allocateInteger(total, weights) {
 /**
  * Who actually shares an expense.
  *
- * Normally that is everyone not in `excludedMembers`. When the exclusion list
- * covers everyone, the payer bears it alone rather than nobody bearing it: an
- * expense with no sharers still counts as paid, so leaving it unallocated makes
- * the report stop balancing -- the sum of every member's net must be 0 for a
- * settlement to be settleable, and an unshared amount pushes it off by exactly
- * that amount. "Nobody else is splitting this" is a real intent (a personal
- * purchase entered for the record), and this is what it means.
+ * Normally that is everyone not in `excludedMembers`. When nobody is left who
+ * can carry the cost, the payer bears it alone rather than nobody bearing it:
+ * an expense with no sharers still counts as paid, so leaving it unallocated
+ * makes the report stop balancing -- the sum of every member's net must be 0
+ * for a settlement to be settleable, and an unshared amount pushes it off by
+ * exactly that amount. "Nobody else is splitting this" is a real intent (a
+ * personal purchase entered for the record), and this is what it means.
+ *
+ * "Nobody who can carry it" is a zero total weight, not an empty list. The
+ * exclusion list covering everyone is the common way to get there, but a trip
+ * whose only non-excluded members all have weight 0 lands in the same place --
+ * `allocateInteger` hands out nothing when the weights sum to zero.
+ *
+ * The payer is charged at weight 1, not their own weight. A member's weight
+ * says how they split costs *with other people*; with no one to split against,
+ * the whole amount is theirs, and a weight-0 payer would otherwise be handed
+ * nothing and reopen the very imbalance this closes.
  *
  * If the payer is no longer a member of the trip there is nobody left to charge
  * and the amount stays unallocated -- the same gap a deleted payer already
@@ -42,8 +53,10 @@ function allocateInteger(total, weights) {
 function sharersOf(members, expense) {
   const excluded = new Set(expense.excludedMembers || []);
   const eligible = members.filter((m) => !excluded.has(m.id));
-  if (eligible.length > 0) return eligible;
-  return members.filter((m) => m.id === expense.enteredBy);
+  if (eligible.reduce((sum, m) => sum + (m.weight || 0), 0) > 0) return eligible;
+  return members
+    .filter((m) => m.id === expense.enteredBy)
+    .map((m) => ({ ...m, weight: 1 }));
 }
 
 function computeSettlement(members, expenses) {

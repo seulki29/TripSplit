@@ -800,4 +800,61 @@ describe('expense scheduleId', () => {
     });
     await expect(addExpense(db, base(t, { scheduleId: 'a/b' }))).rejects.toThrow('SCHEDULE_NOT_FOUND');
   });
+
+  // The widget keeps a stored scheduleId whose schedule has been deleted: it
+  // displays "(연결 안 함)" but still resends the old id on save. Validating an
+  // unchanged value would therefore reject every later edit of that expense --
+  // a merchant typo fix included -- with no visible cause and, when the deleted
+  // schedule was the trip's only dated one, no control able to clear it.
+  describe('a link whose schedule was deleted', () => {
+    async function linkedThenDeleted(db) {
+      const t = await setup(db);
+      const { expenseId } = await addExpense(db, base(t, { scheduleId: t.scheduleId }));
+      await t.tripRef.collection('schedules').doc(t.scheduleId).delete();
+      return { t, expenseId };
+    }
+
+    test('resending the same stale id still saves other fields', async () => {
+      const db = new FakeFirestore();
+      const { t, expenseId } = await linkedThenDeleted(db);
+      await updateExpense(db, {
+        sessionToken: t.token,
+        tripId: t.tripId,
+        expenseId,
+        patch: { merchant: '오타 수정', scheduleId: t.scheduleId },
+      });
+      const snap = await t.tripRef.collection('expenses').doc(expenseId).get();
+      expect(snap.data().merchant).toBe('오타 수정');
+      expect(snap.data().scheduleId).toBe(t.scheduleId);
+    });
+
+    test('clearing the stale link still works', async () => {
+      const db = new FakeFirestore();
+      const { t, expenseId } = await linkedThenDeleted(db);
+      await updateExpense(db, {
+        sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: null },
+      });
+      const snap = await t.tripRef.collection('expenses').doc(expenseId).get();
+      expect(snap.data().scheduleId).toBeNull();
+    });
+
+    // The relaxation is scoped to the value already stored. Pointing an expense
+    // at some other missing schedule is still a bad write.
+    test('switching to a different nonexistent id is still rejected', async () => {
+      const db = new FakeFirestore();
+      const { t, expenseId } = await linkedThenDeleted(db);
+      await expect(updateExpense(db, {
+        sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: 'nope' },
+      })).rejects.toThrow('SCHEDULE_NOT_FOUND');
+    });
+
+    test('an unlinked expense still cannot be pointed at a missing schedule', async () => {
+      const db = new FakeFirestore();
+      const t = await setup(db);
+      const { expenseId } = await addExpense(db, base(t));
+      await expect(updateExpense(db, {
+        sessionToken: t.token, tripId: t.tripId, expenseId, patch: { scheduleId: 'nope' },
+      })).rejects.toThrow('SCHEDULE_NOT_FOUND');
+    });
+  });
 });

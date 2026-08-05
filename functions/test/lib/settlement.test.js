@@ -209,6 +209,35 @@ describe('computeSettlement', () => {
     expect(perMember.find((m) => m.id === 'a').due).toBe(0);
   });
 
+  // The payer carries it at weight 1, not at their own weight -- a weight-0
+  // payer charged their own weight would be handed nothing and the imbalance
+  // would reopen.
+  test('a weight-zero payer bearing an unshared expense still owes all of it', () => {
+    const members = [{ id: 'a', name: 'A', weight: 1 }, { id: 'z', name: 'Z', weight: 0 }];
+    const expenses = [
+      { category: '식비', amount: 10000, enteredBy: 'a', confirmed: true, excludedMembers: [] },
+      {
+        category: '기타', amount: 30000, enteredBy: 'z', confirmed: true, excludedMembers: ['a', 'z'],
+      },
+    ];
+    const { perMember } = computeSettlement(members, expenses);
+    expect(perMember.find((m) => m.id === 'z').due).toBe(30000);
+    expect(perMember.reduce((sum, m) => sum + m.net, 0)).toBe(0);
+  });
+
+  // Same hole reached without excluding everyone: the members left after the
+  // exclusions all have weight 0, so allocateInteger hands out nothing.
+  test('an expense whose only eligible members have weight zero falls back to the payer', () => {
+    const members = [{ id: 'a', name: 'A', weight: 1 }, { id: 'z', name: 'Z', weight: 0 }];
+    const expenses = [
+      { category: '기타', amount: 20000, enteredBy: 'a', confirmed: true, excludedMembers: ['a'] },
+    ];
+    const { perMember } = computeSettlement(members, expenses);
+    expect(perMember.find((m) => m.id === 'a').due).toBe(20000);
+    expect(perMember.find((m) => m.id === 'z').due).toBe(0);
+    expect(perMember.reduce((sum, m) => sum + m.net, 0)).toBe(0);
+  });
+
   // Nothing to fall back to. The amount stays unallocated, which is the same
   // gap a deleted payer already leaves in paidByMember.
   test('excluding everyone when the payer is no longer a member allocates nothing', () => {

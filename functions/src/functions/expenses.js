@@ -140,7 +140,14 @@ async function updateExpense(db, data) {
   }
   if ('scheduleId' in patch) {
     const next = patch.scheduleId ?? null;
-    await assertScheduleExists(db, tripId, next);
+    // Only a genuinely new link is validated. The widget deliberately keeps a
+    // stored scheduleId whose schedule has since been deleted -- it shows
+    // "(연결 안 함)" but resends the old id, so validating an unchanged value
+    // would reject every future save of that expense, including edits that
+    // never touched the link. Worse, when the deleted schedule was the trip's
+    // only dated one the picker is not rendered at all, leaving no control that
+    // could clear the id and no way to ever save the expense again.
+    if (next !== (expense.scheduleId ?? null)) await assertScheduleExists(db, tripId, next);
     update.scheduleId = next;
   }
 
