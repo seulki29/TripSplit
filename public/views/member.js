@@ -63,14 +63,11 @@ async function renderExpensesTab(body, slug, myToken) {
 
 async function loadExpenses(body, slug, myToken) {
   const session = getSession();
-  let expenses, members, scheduleData;
+  let expenses, members;
   try {
-    [expenses, members, scheduleData] = await Promise.all([
+    [expenses, members] = await Promise.all([
       callFunction('listExpenses', { tripId: session.tripId }),
       callFunction('listMembersForLogin', { slug }),
-      // A schedules failure must not take down the expense list; the picker
-      // simply does not appear.
-      callFunction('listSchedules', { tripId: session.tripId }).catch(() => ({ schedules: [] })),
     ]);
   } catch (err) {
     if (myToken !== renderToken) return;
@@ -126,7 +123,7 @@ async function loadExpenses(body, slug, myToken) {
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const exp = expenses.find((x) => x.id === btn.dataset.id);
-      openMemberExpenseEditModal(body, slug, exp, members, scheduleData.schedules);
+      openMemberExpenseEditModal(body, slug, exp, members);
     });
   });
 
@@ -163,7 +160,7 @@ async function loadExpenses(body, slug, myToken) {
   // one handler on it instead of one per reload.
   const addBtn = body.querySelector('#member-add-expense');
   addBtn.disabled = false;
-  addBtn.onclick = () => openExpenseModal(body, slug, members, scheduleData.schedules);
+  addBtn.onclick = () => openExpenseModal(body, slug, members);
 }
 
 async function renderMembersTab(body, slug, myToken) {
@@ -186,15 +183,11 @@ async function renderMembersTab(body, slug, myToken) {
     </div>`).join('');
 }
 
-function openExpenseModal(body, slug, members, schedules) {
+function openExpenseModal(body, slug, members) {
   let category = CATEGORIES[1];
   let photoPath = null;
   let classifyPromise = null;
   let skipped = false;
-  // Set once the user picks a schedule. A late OCR response must not overwrite
-  // the category and date that pick just established -- but amount, merchant
-  // and detail still come from the receipt and are still applied.
-  let scheduleChosen = false;
   let split = null;
 
   openModal('경비 입력', `
@@ -218,12 +211,7 @@ function openExpenseModal(body, slug, members, schedules) {
   }
   rerenderCategoryChips();
 
-  split = mountExpenseSplit(document.getElementById('me-split'), { members, schedules });
-  split.onSchedulePick(({ category: c, date }) => {
-    scheduleChosen = true;
-    if (c) { category = c; rerenderCategoryChips(); }
-    if (date) document.getElementById('me-date').value = date;
-  });
+  split = mountExpenseSplit(document.getElementById('me-split'), { members });
 
   ['me-amount', 'me-merchant', 'me-detail'].forEach((id) => {
     document.getElementById(id).addEventListener('keydown', (e) => {
@@ -257,8 +245,8 @@ function openExpenseModal(body, slug, members, schedules) {
           if (classification.classified === false) {
             showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
           } else {
-            if (!scheduleChosen && classification.category) { category = classification.category; rerenderCategoryChips(); }
-            if (!scheduleChosen && classification.date) document.getElementById('me-date').value = classification.date;
+            if (classification.category) { category = classification.category; rerenderCategoryChips(); }
+            if (classification.date) document.getElementById('me-date').value = classification.date;
             if (classification.amount) document.getElementById('me-amount').value = classification.amount;
             if (classification.merchant) document.getElementById('me-merchant').value = classification.merchant;
             if (classification.detail) document.getElementById('me-detail').value = classification.detail;
@@ -292,7 +280,6 @@ function openExpenseModal(body, slug, members, schedules) {
         merchant: document.getElementById('me-merchant').value,
         detail: document.getElementById('me-detail').value,
         photoPath,
-        scheduleId: split.getScheduleId(),
         excludedMembers: split.getExcludedMembers(),
       });
       closeModal();
@@ -304,7 +291,7 @@ function openExpenseModal(body, slug, members, schedules) {
   });
 }
 
-function openMemberExpenseEditModal(body, slug, exp, members, schedules) {
+function openMemberExpenseEditModal(body, slug, exp, members) {
   let category = exp.category;
   const session = getSession();
 
@@ -329,13 +316,7 @@ function openMemberExpenseEditModal(body, slug, exp, members, schedules) {
 
   const split = mountExpenseSplit(document.getElementById('mee-split'), {
     members,
-    schedules,
-    scheduleId: exp.scheduleId || null,
     excludedMembers: exp.excludedMembers || [],
-  });
-  split.onSchedulePick(({ category: c, date }) => {
-    if (c) { category = c; rerenderChips(); }
-    if (date) document.getElementById('mee-date').value = date;
   });
 
   ['mee-amount', 'mee-merchant', 'mee-detail'].forEach((id) => {
@@ -357,7 +338,6 @@ function openMemberExpenseEditModal(body, slug, exp, members, schedules) {
           amount: Number(document.getElementById('mee-amount').value),
           merchant: document.getElementById('mee-merchant').value,
           detail: document.getElementById('mee-detail').value,
-          scheduleId: split.getScheduleId(),
           excludedMembers: split.getExcludedMembers(),
         },
       });

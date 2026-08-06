@@ -11,7 +11,7 @@ import { minToLabel, labelToMin, mapLinkFor } from '../scheduleLayout.js';
  * "everyone"; the full member list is always saved explicitly.
  */
 function openScheduleForm({
-  tripId, members, schedule, defaultDate, onSaved, spend = null,
+  tripId, members, schedule, defaultDate, onSaved,
 }) {
   const isEdit = !!schedule;
   let category = isEdit ? schedule.category : CATEGORIES[1];
@@ -63,7 +63,6 @@ function openScheduleForm({
     <button type="button" class="btn btn-primary btn-block" id="sf-submit">저장</button>
     ${isEdit ? '<button type="button" class="btn btn-secondary btn-block" id="sf-delete" style="margin-top:0.5rem">삭제</button>' : ''}
     <p class="muted" id="sf-error" style="margin-top:0.5rem;font-size:13px"></p>
-    ${spend ? `<p class="muted" style="margin-top:0.5rem;font-size:12px">이 일정 경비: ${spend.total.toLocaleString()}원 (${spend.count}건)</p>` : ''}
     ${isEdit ? `<p class="muted" style="margin-top:0.5rem;font-size:12px">마지막 수정: ${escapeHtml(lastEditorName(schedule, members))}</p>` : ''}
   `);
 

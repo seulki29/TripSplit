@@ -210,15 +210,12 @@ function openMemberModal(body, slug, member) {
 
 async function renderExpensesTab(body, slug, myToken) {
   const session = getSession();
-  let expenses, members, trip, scheduleData;
+  let expenses, members, trip;
   try {
-    [expenses, members, trip, scheduleData] = await Promise.all([
+    [expenses, members, trip] = await Promise.all([
       callFunction('listExpenses', { tripId: session.tripId }),
       callFunction('listMembersForLogin', { slug }),
       callFunction('getTripSetup', { tripId: session.tripId }),
-      // A schedules failure must not take down the expense tab; the picker
-      // simply does not appear.
-      callFunction('listSchedules', { tripId: session.tripId }).catch(() => ({ schedules: [] })),
     ]);
   } catch (err) {
     if (myToken !== renderToken) return;
@@ -298,7 +295,7 @@ async function renderExpensesTab(body, slug, myToken) {
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       const exp = expenses.find((x) => x.id === btn.dataset.id);
-      openAdminExpenseEditModal(body, slug, exp, members, scheduleData.schedules);
+      openAdminExpenseEditModal(body, slug, exp, members);
     });
   });
   body.querySelectorAll('.btn-waypoint').forEach((btn) => {
@@ -332,7 +329,7 @@ async function renderExpensesTab(body, slug, myToken) {
     });
   });
   if (!locked) {
-    document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members, scheduleData.schedules));
+    document.getElementById('expense-add').addEventListener('click', () => openAdminExpenseModal(body, slug, members));
 
     document.getElementById('expense-exclusion-toggle').addEventListener('click', () => {
       exclusionMode = !exclusionMode;
@@ -388,15 +385,11 @@ function openExclusionModal(body, slug, members, expenses, checkedIds) {
   });
 }
 
-function openAdminExpenseModal(body, slug, members, schedules) {
+function openAdminExpenseModal(body, slug, members) {
   let category = CATEGORIES[1];
   let photoPath = null;
   let classifyPromise = null;
   let skipped = false;
-  // Set once the user picks a schedule. A late OCR response must not overwrite
-  // the category and date that pick just established -- but amount, merchant
-  // and detail still come from the receipt and are still applied.
-  let scheduleChosen = false;
   let split = null;
 
   openModal('경비 입력', `
@@ -423,12 +416,7 @@ function openAdminExpenseModal(body, slug, members, schedules) {
   }
   rerenderCategoryChips();
 
-  split = mountExpenseSplit(document.getElementById('ae-split'), { members, schedules });
-  split.onSchedulePick(({ category: c, date }) => {
-    scheduleChosen = true;
-    if (c) { category = c; rerenderCategoryChips(); }
-    if (date) document.getElementById('ae-date').value = date;
-  });
+  split = mountExpenseSplit(document.getElementById('ae-split'), { members });
 
   ['ae-amount', 'ae-merchant', 'ae-detail'].forEach((id) => {
     document.getElementById(id).addEventListener('keydown', (e) => {
@@ -462,8 +450,8 @@ function openAdminExpenseModal(body, slug, members, schedules) {
           if (classification.classified === false) {
             showToast('자동 인식 실패 — 직접 입력해주세요', 'error');
           } else {
-            if (!scheduleChosen && classification.category) { category = classification.category; rerenderCategoryChips(); }
-            if (!scheduleChosen && classification.date) document.getElementById('ae-date').value = classification.date;
+            if (classification.category) { category = classification.category; rerenderCategoryChips(); }
+            if (classification.date) document.getElementById('ae-date').value = classification.date;
             if (classification.amount) document.getElementById('ae-amount').value = classification.amount;
             if (classification.merchant) document.getElementById('ae-merchant').value = classification.merchant;
             if (classification.detail) document.getElementById('ae-detail').value = classification.detail;
@@ -498,7 +486,6 @@ function openAdminExpenseModal(body, slug, members, schedules) {
         merchant: document.getElementById('ae-merchant').value,
         detail: document.getElementById('ae-detail').value,
         photoPath,
-        scheduleId: split.getScheduleId(),
         excludedMembers: split.getExcludedMembers(),
       });
       closeModal();
@@ -514,7 +501,7 @@ function openAdminExpenseModal(body, slug, members, schedules) {
   });
 }
 
-function openAdminExpenseEditModal(body, slug, exp, members, schedules) {
+function openAdminExpenseEditModal(body, slug, exp, members) {
   let category = exp.category;
   openModal('경비 수정', `
     <div class="field"><label class="label">카테고리</label><div id="ee-category"></div></div>
@@ -534,13 +521,7 @@ function openAdminExpenseEditModal(body, slug, exp, members, schedules) {
 
   const split = mountExpenseSplit(document.getElementById('ee-split'), {
     members,
-    schedules,
-    scheduleId: exp.scheduleId || null,
     excludedMembers: exp.excludedMembers || [],
-  });
-  split.onSchedulePick(({ category: c, date }) => {
-    if (c) { category = c; rerenderChips(); }
-    if (date) document.getElementById('ee-date').value = date;
   });
 
   ['ee-amount', 'ee-merchant', 'ee-detail'].forEach((id) => {
@@ -560,7 +541,6 @@ function openAdminExpenseEditModal(body, slug, exp, members, schedules) {
           amount: Number(document.getElementById('ee-amount').value),
           merchant: document.getElementById('ee-merchant').value,
           detail: document.getElementById('ee-detail').value,
-          scheduleId: split.getScheduleId(),
           excludedMembers: split.getExcludedMembers(),
         },
       });

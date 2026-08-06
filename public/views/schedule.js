@@ -23,7 +23,7 @@ let activeDate = null;
 // keep as module scope across trips: the app does a hard `location.href`
 // navigation whenever the active trip changes, which reloads this module
 // (and resets the cache) along with everything else.
-let cache = null; // { schedules, members, period, expenses } | null
+let cache = null; // { schedules, members, period } | null
 
 function currentView() {
   try {
@@ -43,19 +43,6 @@ function setView(view) {
   }
 }
 
-// Sums the expenses linked to one schedule, or returns null when none are --
-// the modal then omits the line entirely rather than showing "0원".
-//
-// Not filtered by `confirmed`: this answers "how much did we spend here",
-// which is a retrospective question, not a settlement one.
-function spendFor(expenses, scheduleId) {
-  const linked = expenses.filter((e) => e.scheduleId === scheduleId);
-  if (linked.length === 0) return null;
-  return {
-    total: linked.reduce((sum, e) => sum + Number(e.amount || 0), 0),
-    count: linked.length,
-  };
-}
 
 // Entry point. Always refetches: called on first entry into the tab, and
 // member.js / admin.js call it again on every tab switch, so it must reflect
@@ -87,16 +74,12 @@ async function renderScheduleInto(body, slug) {
     renderScheduleInto(body, slug);
   });
 
-  let data, members, trip, expenses;
+  let data, members, trip;
   try {
-    [data, members, trip, expenses] = await Promise.all([
+    [data, members, trip] = await Promise.all([
       callFunction('listSchedules', { tripId: session.tripId }),
       callFunction('listMembers', { tripId: session.tripId }),
       callFunction('getTripSetup', { tripId: session.tripId }),
-      // Only the spend line depends on this. Failing soft keeps an expenses
-      // outage from replacing the whole schedule tab with an error.
-      // listExpenses resolves to a bare array, so the fallback is one too.
-      callFunction('listExpenses', { tripId: session.tripId }).catch(() => []),
     ]);
   } catch (err) {
     if (myToken !== renderToken) return;
@@ -117,7 +100,7 @@ async function renderScheduleInto(body, slug) {
   }
   if (myToken !== renderToken) return;
 
-  cache = { schedules: data.schedules, members, period: trip.period, expenses };
+  cache = { schedules: data.schedules, members, period: trip.period };
 
   const addBtn = body.querySelector('#sched-add');
   // Data has loaded and the handler below is now bound, so the button can
@@ -129,8 +112,6 @@ async function renderScheduleInto(body, slug) {
       members,
       schedule: null,
       defaultDate: activeDate || trip.period?.start || '',
-      // A schedule that does not exist yet cannot have expenses linked to it.
-      spend: null,
       onSaved: () => renderScheduleInto(body, slug),
     });
   });
@@ -177,7 +158,6 @@ function paintSchedule(body, slug) {
         members,
         schedule: found,
         defaultDate: null,
-        spend: spendFor(cache.expenses, found.id),
         onSaved: () => renderScheduleInto(body, slug),
       });
     });
